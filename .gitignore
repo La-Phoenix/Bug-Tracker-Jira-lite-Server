@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+*.db
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vs/
+
+# Build outputs
+out/
+publish/
+TestResults/
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.*
+
+# Docker
+*.pid
+Dockerfile
+docker-compose.override.yml

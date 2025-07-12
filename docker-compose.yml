@@ -1,0 +1,36 @@
+
+services:
+  db:
+    image: postgres:16
+    container_name: bugtrackr_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: bugtrackr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bugtrackr.api:
+    build:
+      context: .
+      dockerfile: BugTrackr.API/Dockerfile
+    image: bugtrackrapi
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=bugtrackr;Username=postgres;Password=postgres"
+
+volumes:
+  pgdata:
