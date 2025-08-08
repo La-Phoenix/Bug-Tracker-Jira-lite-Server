@@ -28,5 +28,5 @@ TestResults/
 
 # Docker
 *.pid
-Dockerfile
+#Dockerfile
 docker-compose.override.yml
