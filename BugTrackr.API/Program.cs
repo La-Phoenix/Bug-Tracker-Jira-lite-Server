@@ -104,6 +104,7 @@ builder.Services.AddCors(options =>
              "http://localhost:5173",         // frontend local dev
              "http://localhost:8080", // Swagger on port 8080
              "http://localhost:5215",         // Swagger UI (from launchSettings)
+             "https://bug-tracker-jira-lite-client.vercel.app/",
              "https://localhost:58301",
             "https://localhost:5215",
             "https://localhost:7275"
