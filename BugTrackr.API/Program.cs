@@ -138,6 +138,12 @@ app.Use(async (context, next) =>
     }
 });
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<BugTrackrDbContext>();
+    db.Database.Migrate();
+}
+
 // Development 
 if (app.Environment.IsDevelopment())
 {
