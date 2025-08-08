@@ -26,6 +26,10 @@ public class BugTrackrDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<User>()
+            .HasIndex(u => u.Email)
+            .IsUnique();
+
         // Composite keys
         modelBuilder.Entity<ProjectUser>()
             .HasKey(pu => new { pu.ProjectId, pu.UserId });
