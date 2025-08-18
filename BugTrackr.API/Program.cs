@@ -271,14 +271,15 @@ builder.Services.AddScoped<IJwtService, JwtService>();
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
-// Configure Data Protection for production
+// Configure Data Protection with production-safe directory
 if (builder.Environment.IsProduction())
 {
-    // Production: Store keys in a persistent location (Azure Key Vault, Redis, etc.)
+    // Production: Use writable temp directory
+    var keysDir = Path.Combine(Path.GetTempPath(), "bugtrackr-keys");
     builder.Services.AddDataProtection()
         .SetApplicationName("BugTrackr")
         .SetDefaultKeyLifetime(TimeSpan.FromDays(90))
-        .PersistKeysToFileSystem(new DirectoryInfo("/var/dpkeys")); // Use a persistent volume in production
+        .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
 }
 else
 {
@@ -372,7 +373,7 @@ else
         };
     });
 
-    // Google OAuth
+    // Google OAuth - conditionally register
     if (!string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret))
     {
         authBuilder.AddGoogle(googleOptions =>
@@ -408,7 +409,9 @@ else
                 logger.LogError("Google OAuth failed: {Error}", context.Failure?.Message);
 
                 var returnUrl = context.Properties?.Items["ReturnUrl"] ??
-                    (builder.Environment.IsProduction() ? "https://your-frontend-domain.com" : "http://localhost:5173");
+                    (builder.Environment.IsProduction()
+                        ? "https://bug-tracker-jira-lite-client.vercel.app"
+                        : "http://localhost:5173");
 
                 context.Response.Redirect($"{returnUrl}?error=oauth_failed");
                 context.HandleResponse();
@@ -416,7 +419,7 @@ else
         });
     }
 
-    // GitHub OAuth
+    // GitHub OAuth - conditionally register
     if (!string.IsNullOrEmpty(githubClientId) && !string.IsNullOrEmpty(githubClientSecret))
     {
         authBuilder.AddGitHub(githubOptions =>
@@ -451,7 +454,9 @@ else
                 logger.LogError("GitHub OAuth failed: {Error}", context.Failure?.Message);
 
                 var returnUrl = context.Properties?.Items["ReturnUrl"] ??
-                    (builder.Environment.IsProduction() ? "https://your-frontend-domain.com" : "http://localhost:5173");
+                    (builder.Environment.IsProduction()
+                        ? "https://bug-tracker-jira-lite-client.vercel.app"
+                        : "http://localhost:5173");
 
                 context.Response.Redirect($"{returnUrl}?error=oauth_failed");
                 context.HandleResponse();
@@ -463,7 +468,7 @@ else
 builder.Services.AddAuthorization();
 builder.Services.AddEndpointsApiExplorer();
 
-// Swagger configuration
+// Swagger configuration - only in non-production
 if (!builder.Environment.IsProduction())
 {
     builder.Services.AddSwaggerGen(c =>
@@ -498,7 +503,7 @@ if (!builder.Environment.IsProduction())
     });
 }
 
-// CORS configuration
+// CORS configuration - environment specific
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -506,7 +511,6 @@ builder.Services.AddCors(options =>
         if (builder.Environment.IsProduction())
         {
             policy.WithOrigins(
-                "https://your-production-frontend-domain.com",
                 "https://bug-tracker-jira-lite-client.vercel.app"
             );
         }
@@ -524,22 +528,21 @@ builder.Services.AddCors(options =>
 
         policy.AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials()
-              .SetIsOriginAllowedToAllowWildcardSubdomains();
+              .AllowCredentials();
     });
 });
 
 // Logging configuration
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
 if (builder.Environment.IsProduction())
 {
-    builder.Logging.ClearProviders();
-    builder.Logging.AddConsole();
-    //builder.Logging.AddApplicationInsights(); // Add if using Azure
+    builder.Logging.SetMinimumLevel(LogLevel.Information);
 }
 else
 {
-    builder.Logging.ClearProviders();
-    builder.Logging.AddConsole();
+    builder.Logging.SetMinimumLevel(LogLevel.Debug);
 }
 
 var app = builder.Build();
@@ -547,7 +550,7 @@ var app = builder.Build();
 // Ensure data protection keys directory exists
 if (builder.Environment.IsProduction())
 {
-    var keysDir = "/var/dpkeys";
+    var keysDir = Path.Combine(Path.GetTempPath(), "bugtrackr-keys");
     if (!Directory.Exists(keysDir))
     {
         Directory.CreateDirectory(keysDir);
@@ -592,7 +595,7 @@ if (!app.Environment.IsEnvironment("Testing"))
 }
 
 // Configure the HTTP request pipeline
-if (!builder.Environment.IsProduction())
+if (!app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -614,6 +617,7 @@ if (app.Environment.IsProduction())
         context.Response.Headers.Add("X-Frame-Options", "DENY");
         context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
         context.Response.Headers.Add("Referrer-Policy", "strict-origin-when-cross-origin");
+        context.Response.Headers.Add("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
         await next();
     });
 
