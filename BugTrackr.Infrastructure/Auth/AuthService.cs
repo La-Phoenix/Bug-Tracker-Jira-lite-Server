@@ -1,7 +1,7 @@
 ﻿
 using AutoMapper;
-using BugTrackr.Application.Dtos;
-using BugTrackr.Application.Services;
+using BugTrackr.Application.Dtos.Auth;
+using BugTrackr.Application.Services.Auth;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;

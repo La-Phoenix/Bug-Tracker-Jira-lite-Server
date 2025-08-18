@@ -1,6 +1,6 @@
-﻿using BugTrackr.Application.Dtos;
+﻿using BugTrackr.Application.Dtos.Auth;
 
-namespace BugTrackr.Application.Services;
+namespace BugTrackr.Application.Services.Auth;
 
 public interface IAuthService
 {

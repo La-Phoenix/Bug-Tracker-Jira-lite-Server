@@ -1,4 +1,4 @@
-﻿using BugTrackr.Application.Services;
+﻿using BugTrackr.Application.Services.JWT;
 using BugTrackr.Domain.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;

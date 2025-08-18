@@ -1,4 +1,4 @@
-﻿namespace BugTrackr.Application.Dtos;
+﻿namespace BugTrackr.Application.Dtos.Auth;
 public class AuthResponseDto
 {
     public int Id { get; set; }

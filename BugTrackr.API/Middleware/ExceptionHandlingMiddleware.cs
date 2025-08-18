@@ -47,8 +47,9 @@ public class ExceptionHandlingMiddleware
         {
             context.Response.StatusCode = 500;
             context.Response.ContentType = "application/json";
+            _logger.LogError(ex, "An unhandled error occurred");
 
-            var response = ApiResponse<string>.Failure("An unexpected error occurred.", 500);
+            var response = ApiResponse<string>.Failure($"An unexpected error occurred. {ex.Message}", 500);
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
     }

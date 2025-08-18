@@ -24,6 +24,13 @@ public class Repository<T> : IRepository<T> where T : class
 
     public async Task AddAsync(T entity) => await _dbSet.AddAsync(entity);
 
+    public async Task UpdateAsync(T entity)
+    {
+        _dbSet.Attach(entity);
+        _context.Entry(entity).State = EntityState.Modified;
+        await _context.SaveChangesAsync();
+    }
+
     public void Update(T entity) => _dbSet.Update(entity);
 
     public void Delete(T entity) => _dbSet.Remove(entity);

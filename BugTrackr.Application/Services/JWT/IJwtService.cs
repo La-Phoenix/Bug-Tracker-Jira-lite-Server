@@ -1,6 +1,6 @@
 ﻿using BugTrackr.Domain.Entities;
 
-namespace BugTrackr.Application.Services
+namespace BugTrackr.Application.Services.JWT
 {
     public interface IJwtService
     {

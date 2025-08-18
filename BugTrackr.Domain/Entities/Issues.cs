@@ -1,7 +1,4 @@
-﻿using System.Net.Mail;
-using System.Xml.Linq;
-
-namespace BugTrackr.Domain.Entities;
+﻿namespace BugTrackr.Domain.Entities;
 
 public class Issue
 {

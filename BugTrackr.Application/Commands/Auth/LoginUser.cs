@@ -1,15 +1,16 @@
 ﻿using AutoMapper;
 using BugTrackr.Application.Common;
 using BugTrackr.Application.Common.Helpers;
-using BugTrackr.Application.Dtos;
+using BugTrackr.Application.Dtos.Auth;
 using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.JWT;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 
-namespace BugTrackr.Application.Auth.Commands;
+namespace BugTrackr.Application.Commands.Auth;
 
 public record LoginUserCommand(string Email, string Password) : IRequest<ApiResponse<AuthResponseDto>>, ISkipFluentValidation;
 

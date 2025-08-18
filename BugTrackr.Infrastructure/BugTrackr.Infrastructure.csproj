@@ -1,6 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Remove="Interfaces\**" />
+    <Compile Remove="NewFolder\**" />
+    <EmbeddedResource Remove="Interfaces\**" />
+    <EmbeddedResource Remove="NewFolder\**" />
+    <None Remove="Interfaces\**" />
+    <None Remove="NewFolder\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\BugTrackr.Application\BugTrackr.Application.csproj" />
     <ProjectReference Include="..\BugTrackr.Domain\BugTrackr.Domain.csproj" />
   </ItemGroup>
@@ -17,11 +26,6 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.12.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.12.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Interfaces\" />
-    <Folder Include="NewFolder\" />
   </ItemGroup>
 
   <PropertyGroup>

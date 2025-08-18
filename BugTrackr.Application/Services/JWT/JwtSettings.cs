@@ -1,4 +1,4 @@
-﻿namespace BugTrackr.Application.Services;
+﻿namespace BugTrackr.Application.Services.JWT;
 public class JwtSettings
 {
     public string Key { get; set; } = default!;
