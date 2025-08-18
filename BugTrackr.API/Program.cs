@@ -231,6 +231,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using BugTrackr.Application.Services.Auth;
 using BugTrackr.Application.Services.JWT;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -268,6 +269,14 @@ builder.Services.AddDbContext<BugTrackrDbContext>(options =>
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+
+// Configure forwarded headers for Render deployment
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
@@ -546,6 +555,12 @@ else
 }
 
 var app = builder.Build();
+
+// Use forwarded headers - MUST be first middleware in production
+if (app.Environment.IsProduction())
+{
+    app.UseForwardedHeaders();
+}
 
 // Ensure data protection keys directory exists
 if (builder.Environment.IsProduction())
