@@ -232,6 +232,8 @@ using Microsoft.AspNetCore.DataProtection;
 using BugTrackr.Application.Services.Auth;
 using BugTrackr.Application.Services.JWT;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -256,16 +258,16 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddControllers();
 
 // CONDITIONAL DATABASE CONFIGURATION
-//if (builder.Environment.IsEnvironment("Testing"))
-//{
-//    builder.Services.AddDbContext<BugTrackrDbContext>(options =>
-//        options.UseInMemoryDatabase("TestDatabase"));
-//}
-//else
-//{
-builder.Services.AddDbContext<BugTrackrDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-//}
+if (builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddDbContext<BugTrackrDbContext>(options =>
+        options.UseInMemoryDatabase("TestDatabase"));
+}
+else
+{
+    builder.Services.AddDbContext<BugTrackrDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+}
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
@@ -280,22 +282,22 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
-// Configure Data Protection with production-safe directory
+// Configure Data Protection FIRST - before authentication
+var dataProtectionBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName("BugTrackr");
+
 if (builder.Environment.IsProduction())
 {
-    // Production: Use writable temp directory
     var keysDir = Path.Combine(Path.GetTempPath(), "bugtrackr-keys");
-    builder.Services.AddDataProtection()
-        .SetApplicationName("BugTrackr")
-        .SetDefaultKeyLifetime(TimeSpan.FromDays(90))
-        .PersistKeysToFileSystem(new DirectoryInfo(keysDir));
+    Directory.CreateDirectory(keysDir);
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysDir))
+        .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 }
 else
 {
-    // Development: Local file system
-    builder.Services.AddDataProtection()
-        .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Directory.GetCurrentDirectory(), "keys")))
-        .SetApplicationName("BugTrackr")
+    var keysDir = Path.Combine(Directory.GetCurrentDirectory(), "keys");
+    Directory.CreateDirectory(keysDir);
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysDir))
         .SetDefaultKeyLifetime(TimeSpan.FromDays(30));
 }
 
@@ -332,6 +334,10 @@ if (builder.Environment.IsEnvironment("Testing"))
 }
 else
 {
+    // Get the data protection provider for OAuth state validation
+    var tempServiceProvider = builder.Services.BuildServiceProvider();
+    var dataProtectionProvider = tempServiceProvider.GetRequiredService<IDataProtectionProvider>();
+
     // Full authentication configuration for development/production
     var authBuilder = builder.Services.AddAuthentication(options =>
     {
@@ -392,43 +398,61 @@ else
             googleOptions.ClientSecret = googleClientSecret;
             googleOptions.CallbackPath = "/api/auth/external/callback";
             googleOptions.SaveTokens = true;
-            googleOptions.Scope.Add("email");
-            googleOptions.Scope.Add("profile");
+
+            // Clear and set specific scopes
+            googleOptions.Scope.Clear();
             googleOptions.Scope.Add("openid");
+            googleOptions.Scope.Add("profile");
+            googleOptions.Scope.Add("email");
 
             // Production-ready cookie settings
+            googleOptions.CorrelationCookie.Name = "BugTrackr.Google.Correlation";
             googleOptions.CorrelationCookie.SameSite = SameSiteMode.None;
             googleOptions.CorrelationCookie.SecurePolicy = builder.Environment.IsProduction()
                 ? CookieSecurePolicy.Always
                 : CookieSecurePolicy.SameAsRequest;
             googleOptions.CorrelationCookie.HttpOnly = true;
             googleOptions.CorrelationCookie.IsEssential = true;
+            googleOptions.CorrelationCookie.Expiration = TimeSpan.FromMinutes(15);
+
+            // Configure state validation with shared data protection provider
+            googleOptions.StateDataFormat = new PropertiesDataFormat(
+                dataProtectionProvider.CreateProtector("Google-OAuth-State-Protection")
+            );
 
             // Event handlers
             googleOptions.Events.OnCreatingTicket = async context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation("Google OAuth successful for user: {Email}",
-                    context.Principal?.FindFirst("email")?.Value ?? "Unknown");
+                var email = context.Principal?.FindFirst(ClaimTypes.Email)?.Value ??
+                           context.Principal?.FindFirst("email")?.Value ?? "Unknown";
+                logger.LogInformation("Google OAuth successful for user: {Email}", email);
             };
 
             googleOptions.Events.OnRemoteFailure = async context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogError("Google OAuth failed: {Error}", context.Failure?.Message);
+                logger.LogError("Google OAuth failed: {Error} - {ErrorDescription}",
+                    context.Failure?.Message, context.Failure?.InnerException?.Message);
 
                 var returnUrl = context.Properties?.Items["ReturnUrl"] ??
                     (builder.Environment.IsProduction()
                         ? "https://bug-tracker-jira-lite-client.vercel.app"
                         : "http://localhost:5173");
 
-                context.Response.Redirect($"{returnUrl}?error=oauth_failed");
+                context.Response.Redirect($"{returnUrl}?error=oauth_failed&details={Uri.EscapeDataString(context.Failure?.Message ?? "Unknown error")}");
                 context.HandleResponse();
+            };
+
+            googleOptions.Events.OnTicketReceived = async context =>
+            {
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogDebug("Google OAuth ticket received for scheme: {Scheme}", context.Scheme.Name);
             };
         });
     }
 
-    // GitHub OAuth - conditionally register
+    // GitHub OAuth - conditionally register  
     if (!string.IsNullOrEmpty(githubClientId) && !string.IsNullOrEmpty(githubClientSecret))
     {
         authBuilder.AddGitHub(githubOptions =>
@@ -438,40 +462,55 @@ else
             githubOptions.ClientSecret = githubClientSecret;
             githubOptions.CallbackPath = "/api/auth/external/callback";
             githubOptions.SaveTokens = true;
+
+            // Clear and set specific scopes
+            githubOptions.Scope.Clear();
             githubOptions.Scope.Add("user:email");
             githubOptions.Scope.Add("read:user");
 
             // Production-ready cookie settings
+            githubOptions.CorrelationCookie.Name = "BugTrackr.GitHub.Correlation";
             githubOptions.CorrelationCookie.SameSite = SameSiteMode.None;
             githubOptions.CorrelationCookie.SecurePolicy = builder.Environment.IsProduction()
                 ? CookieSecurePolicy.Always
                 : CookieSecurePolicy.SameAsRequest;
             githubOptions.CorrelationCookie.HttpOnly = true;
             githubOptions.CorrelationCookie.IsEssential = true;
+            githubOptions.CorrelationCookie.Expiration = TimeSpan.FromMinutes(15);
+
+            // Configure state validation with shared data protection provider
+            githubOptions.StateDataFormat = new PropertiesDataFormat(
+                dataProtectionProvider.CreateProtector("GitHub-OAuth-State-Protection")
+            );
 
             // Event handlers
             githubOptions.Events.OnCreatingTicket = async context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation("GitHub OAuth successful for user: {Login}",
-                    context.Principal?.FindFirst("login")?.Value ?? "Unknown");
+                var login = context.Principal?.FindFirst("login")?.Value ??
+                           context.Principal?.FindFirst(ClaimTypes.Name)?.Value ?? "Unknown";
+                logger.LogInformation("GitHub OAuth successful for user: {Login}", login);
             };
 
             githubOptions.Events.OnRemoteFailure = async context =>
             {
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-                logger.LogError("GitHub OAuth failed: {Error}", context.Failure?.Message);
+                logger.LogError("GitHub OAuth failed: {Error} - {ErrorDescription}",
+                    context.Failure?.Message, context.Failure?.InnerException?.Message);
 
                 var returnUrl = context.Properties?.Items["ReturnUrl"] ??
                     (builder.Environment.IsProduction()
                         ? "https://bug-tracker-jira-lite-client.vercel.app"
                         : "http://localhost:5173");
 
-                context.Response.Redirect($"{returnUrl}?error=oauth_failed");
+                context.Response.Redirect($"{returnUrl}?error=oauth_failed&details={Uri.EscapeDataString(context.Failure?.Message ?? "Unknown error")}");
                 context.HandleResponse();
             };
         });
     }
+
+    // Dispose temporary service provider
+    tempServiceProvider.Dispose();
 }
 
 builder.Services.AddAuthorization();
@@ -560,24 +599,6 @@ var app = builder.Build();
 if (app.Environment.IsProduction())
 {
     app.UseForwardedHeaders();
-}
-
-// Ensure data protection keys directory exists
-if (builder.Environment.IsProduction())
-{
-    var keysDir = Path.Combine(Path.GetTempPath(), "bugtrackr-keys");
-    if (!Directory.Exists(keysDir))
-    {
-        Directory.CreateDirectory(keysDir);
-    }
-}
-else
-{
-    var keysDir = Path.Combine(Directory.GetCurrentDirectory(), "keys");
-    if (!Directory.Exists(keysDir))
-    {
-        Directory.CreateDirectory(keysDir);
-    }
 }
 
 // Global 404 handler
