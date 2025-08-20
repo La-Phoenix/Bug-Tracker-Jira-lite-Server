@@ -142,15 +142,13 @@ if (!string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientS
         googleOptions.Scope.Add("profile");
         googleOptions.Scope.Add("email");
 
-        // Production-ready cookie settings
-        googleOptions.CorrelationCookie.Name = "BugTrackr.Google.Correlation";
+        // Simplified cookie settings - let ASP.NET Core handle state
         googleOptions.CorrelationCookie.SameSite = SameSiteMode.None;
         googleOptions.CorrelationCookie.SecurePolicy = builder.Environment.IsProduction()
             ? CookieSecurePolicy.Always
             : CookieSecurePolicy.SameAsRequest;
         googleOptions.CorrelationCookie.HttpOnly = true;
         googleOptions.CorrelationCookie.IsEssential = true;
-        googleOptions.CorrelationCookie.Expiration = TimeSpan.FromMinutes(15);
 
         // Event handlers
         googleOptions.Events.OnCreatingTicket = async context =>
@@ -167,13 +165,23 @@ if (!string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientS
             logger.LogError("Google OAuth failed: {Error} - {ErrorDescription}",
                 context.Failure?.Message, context.Failure?.InnerException?.Message);
 
+            // Skip automatic redirect handling
+            context.SkipHandler();
+
             var returnUrl = context.Properties?.Items["ReturnUrl"] ??
                 (builder.Environment.IsProduction()
                     ? "https://bug-tracker-jira-lite-client.vercel.app"
                     : "http://localhost:5173");
 
-            context.Response.Redirect($"{returnUrl}?error=oauth_failed&details={Uri.EscapeDataString(context.Failure?.Message ?? "Unknown error")}");
-            context.HandleResponse();
+            context.Response.Redirect($"{returnUrl}?error=oauth_failed");
+        };
+
+        // Add state validation debugging
+        googleOptions.Events.OnRedirectToAuthorizationEndpoint = async context =>
+        {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogDebug("Google OAuth redirect - State: {State}", context.Properties.Items.ContainsKey("state") ? "Present" : "Missing");
+            context.HttpContext.Response.Redirect(context.RedirectUri);
         };
     });
 }
@@ -194,15 +202,13 @@ if (!string.IsNullOrEmpty(githubClientId) && !string.IsNullOrEmpty(githubClientS
         githubOptions.Scope.Add("user:email");
         githubOptions.Scope.Add("read:user");
 
-        // Production-ready cookie settings
-        githubOptions.CorrelationCookie.Name = "BugTrackr.GitHub.Correlation";
+        // Simplified cookie settings - let ASP.NET Core handle state
         githubOptions.CorrelationCookie.SameSite = SameSiteMode.None;
         githubOptions.CorrelationCookie.SecurePolicy = builder.Environment.IsProduction()
             ? CookieSecurePolicy.Always
             : CookieSecurePolicy.SameAsRequest;
         githubOptions.CorrelationCookie.HttpOnly = true;
         githubOptions.CorrelationCookie.IsEssential = true;
-        githubOptions.CorrelationCookie.Expiration = TimeSpan.FromMinutes(15);
 
         // Event handlers
         githubOptions.Events.OnCreatingTicket = async context =>
@@ -219,13 +225,15 @@ if (!string.IsNullOrEmpty(githubClientId) && !string.IsNullOrEmpty(githubClientS
             logger.LogError("GitHub OAuth failed: {Error} - {ErrorDescription}",
                 context.Failure?.Message, context.Failure?.InnerException?.Message);
 
+            // Skip automatic redirect handling
+            context.SkipHandler();
+
             var returnUrl = context.Properties?.Items["ReturnUrl"] ??
                 (builder.Environment.IsProduction()
                     ? "https://bug-tracker-jira-lite-client.vercel.app"
                     : "http://localhost:5173");
 
-            context.Response.Redirect($"{returnUrl}?error=oauth_failed&details={Uri.EscapeDataString(context.Failure?.Message ?? "Unknown error")}");
-            context.HandleResponse();
+            context.Response.Redirect($"{returnUrl}?error=oauth_failed");
         };
     });
 }
@@ -384,4 +392,3 @@ app.MapControllers();
 app.Run();
 
 public partial class Program;
-

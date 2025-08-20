@@ -130,27 +130,32 @@ public class AuthController : ControllerBase
         {
             _logger.LogInformation("Processing OAuth callback for return URL: {ReturnUrl}", returnUrl);
 
-            // Check for OAuth error parameters
+            // Check for OAuth error parameters first
             if (Request.Query.ContainsKey("error"))
             {
                 var error = Request.Query["error"].ToString();
                 var errorDescription = Request.Query["error_description"].ToString();
                 _logger.LogError("OAuth callback error: {Error} - {Description}", error, errorDescription);
 
-                var errorReturnUrl = _environment.IsProduction()
-                    ? "https://bug-tracker-jira-lite-client.vercel.app"
-                    : "http://localhost:5173";
+                var errorReturnUrl = GetValidReturnUrl(returnUrl);
                 return Redirect($"{errorReturnUrl}?error=oauth_failed&message={Uri.EscapeDataString(error)}");
             }
 
+            // Attempt external authentication
             var result = await HttpContext.AuthenticateAsync("External");
 
             if (result?.Principal == null || !result.Succeeded)
             {
-                _logger.LogError("External authentication failed");
-                var errorReturnUrl = _environment.IsProduction()
-                    ? "https://bug-tracker-jira-lite-client.vercel.app"
-                    : "http://localhost:5173";
+                _logger.LogError("External authentication failed - Succeeded: {Succeeded}, Principal: {Principal}",
+                    result?.Succeeded, result?.Principal != null ? "Present" : "Null");
+
+                // Log more details about the failure
+                if (result?.Failure != null)
+                {
+                    _logger.LogError("Authentication failure details: {Failure}", result.Failure.Message);
+                }
+
+                var errorReturnUrl = GetValidReturnUrl(returnUrl);
                 return Redirect($"{errorReturnUrl}?error=auth_failed");
             }
 
@@ -159,14 +164,15 @@ public class AuthController : ControllerBase
             var email = result.Principal.FindFirst(ClaimTypes.Email)?.Value;
             var name = result.Principal.FindFirst(ClaimTypes.Name)?.Value ?? "External User";
 
+            _logger.LogInformation("OAuth callback claims - UserId: {UserId}, Email: {Email}, Name: {Name}",
+                externalUserId, email, name);
+
             if (string.IsNullOrEmpty(externalUserId) || string.IsNullOrEmpty(email))
             {
                 _logger.LogError("Missing required claims - ExternalUserId: {ExternalUserId}, Email: {Email}",
                     externalUserId ?? "NULL", email ?? "NULL");
 
-                var errorReturnUrl = _environment.IsProduction()
-                    ? "https://bug-tracker-jira-lite-client.vercel.app"
-                    : "http://localhost:5173";
+                var errorReturnUrl = GetValidReturnUrl(returnUrl);
                 return Redirect($"{errorReturnUrl}?error=missing_claims");
             }
 
@@ -195,41 +201,45 @@ public class AuthController : ControllerBase
             // Clean up external authentication cookie
             await HttpContext.SignOutAsync("External");
 
-            // Validate return URL one more time before redirect
-            if (!IsValidReturnUrl(returnUrl))
-            {
-                returnUrl = _environment.IsProduction()
-                    ? "https://bug-tracker-jira-lite-client.vercel.app"
-                    : "http://localhost:5173";
-            }
+            var finalReturnUrl = GetValidReturnUrl(returnUrl);
+            var redirectUrl = $"{finalReturnUrl}?token={jwt}";
+            _logger.LogInformation("Redirecting to: {RedirectUrl}", redirectUrl);
 
-            var finalRedirectUrl = $"{returnUrl}?token={jwt}";
-            _logger.LogInformation("Redirecting to: {FinalRedirectUrl}", finalRedirectUrl);
-
-            return Redirect(finalRedirectUrl);
+            return Redirect(redirectUrl);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in ExternalLoginCallback");
-            var errorReturnUrl = _environment.IsProduction()
-                ? "https://bug-tracker-jira-lite-client.vercel.app"
-                : "http://localhost:5173";
+            var errorReturnUrl = GetValidReturnUrl(returnUrl);
             return Redirect($"{errorReturnUrl}?error=callback_error");
         }
     }
 
-    [HttpGet("debug/users")]
-    [AllowAnonymous]
-    public async Task<IActionResult> DebugUsers()
+    private string GetValidReturnUrl(string returnUrl)
     {
-        var users = await _context.Users.ToListAsync();
-        return Ok(users);
+        if (IsValidReturnUrl(returnUrl))
+            return returnUrl;
+
+        return _environment.IsProduction()
+            ? "https://bug-tracker-jira-lite-client.vercel.app"
+            : "http://localhost:5173";
     }
 
-    [HttpGet("test-exception")]
-    public IActionResult TestException()
-    {
-        throw new AppException("This should be caught", 400);
-    }
+
+
+
+    //[HttpGet("debug/users")]
+    //[AllowAnonymous]
+    //public async Task<IActionResult> DebugUsers()
+    //{
+    //    var users = await _context.Users.ToListAsync();
+    //    return Ok(users);
+    //}
+
+    //[HttpGet("test-exception")]
+    //public IActionResult TestException()
+    //{
+    //    throw new AppException("This should be caught", 400);
+    //}
 }
 
