@@ -30,3 +30,8 @@ TestResults/
 *.pid
 #Dockerfile
 docker-compose.override.yml
+
+
+# App settings
+appsettings.json
+appsettings.*.json
