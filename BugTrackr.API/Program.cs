@@ -258,16 +258,16 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddControllers();
 
 // CONDITIONAL DATABASE CONFIGURATION
-if (builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddDbContext<BugTrackrDbContext>(options =>
-        options.UseInMemoryDatabase("TestDatabase"));
-}
-else
-{
+//if (builder.Environment.IsEnvironment("Testing"))
+//{
+//    builder.Services.AddDbContext<BugTrackrDbContext>(options =>
+//        options.UseInMemoryDatabase("TestDatabase"));
+//}
+//else
+//{
     builder.Services.AddDbContext<BugTrackrDbContext>(options =>
         options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-}
+//}
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
