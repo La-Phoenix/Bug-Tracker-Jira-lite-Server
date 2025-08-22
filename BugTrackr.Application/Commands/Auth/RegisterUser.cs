@@ -33,17 +33,23 @@ public class RegisterUserCommandValidator : AbstractValidator<RegisterUserComman
 public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, ApiResponse<AuthResponseDto>>
 {
     private readonly IRepository<User> _userRepo;
+    private readonly IRepository<Project> _projectRepo;
+    private readonly IRepository<ProjectUser> _projectUserRepo;
     private readonly IJwtService _jwtService;
     private readonly IMapper _mapper;
     private readonly IValidator<RegisterUserCommand> _validator;
 
     public RegisterUserCommandHandler(
         IRepository<User> userRepo,
+        IRepository<Project> projectRepo,
+        IRepository<ProjectUser> projectUserRepo,
         IJwtService jwtService,
         IValidator<RegisterUserCommand> validator,
         IMapper mapper)
     {
         _userRepo = userRepo;
+        _projectUserRepo = projectUserRepo;
+        _projectRepo = projectRepo;
         _jwtService = jwtService;
         _mapper = mapper;
         _validator = validator;
@@ -57,15 +63,10 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
             var existingUser = await _userRepo.Query()
                 .FirstOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
 
-            //Console.WriteLine($"Existing User: {existingUser?.Email}");
-            //Console.WriteLine("🔍 Existing user check for email: " + request.Email);
-            //Console.WriteLine("→ Result: " + (existingUser != null ? "Found user: " + existingUser.Email : "No match"));
-
             if (existingUser is not null)
-                //throw new AppException("Email already exists.", 409);
                 return ApiResponse<AuthResponseDto>.Failure("Email already exists.", 409);
 
-            // Run validation after confirming user exists (Manual)
+            // Run validation after confirming user doesn't exist (Manual)
             var validationResult = await _validator.ValidateAsync(request, cancellationToken);
             if (!validationResult.IsValid)
             {
@@ -78,13 +79,31 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
             // Map request to User entity
             var newUser = _mapper.Map<User>(request);
 
+            // REMOVE THE DUPLICATE - Only add once
             await _userRepo.AddAsync(newUser);
             await _userRepo.SaveChangesAsync(cancellationToken);
+
+            // AUTO-ADD TO DEFAULT PROJECT
+            var defaultProject = await _projectRepo.Query()
+                .FirstOrDefaultAsync(p => p.Name == "Sample Project", cancellationToken);
+
+            if (defaultProject != null)
+            {
+                var projectUser = new ProjectUser
+                {
+                    ProjectId = defaultProject.Id,
+                    UserId = newUser.Id,
+                    RoleInProject = "Member"
+                };
+
+                await _projectUserRepo.AddAsync(projectUser);
+                await _projectUserRepo.SaveChangesAsync(cancellationToken);
+            }
 
             // Generate JWT token and map to response DTO
             var response = _mapper.Map<AuthResponseDto>(newUser);
             response.Token = _jwtService.GenerateToken(newUser);
-            return ApiResponse<AuthResponseDto>.SuccessResponse(response, 201, "Sign up successfull.");
+            return ApiResponse<AuthResponseDto>.SuccessResponse(response, 201, "Sign up successful.");
         }
         catch (Exception ex)
         {
@@ -93,4 +112,5 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
             return resp;
         }
     }
+
 }

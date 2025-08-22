@@ -9,7 +9,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace BugTrackr.Application.Issues.Commands;
+namespace BugTrackr.Application.Commands.Issues;
 
 public record CreateIssueCommand(
     string Title,
@@ -55,17 +55,23 @@ public class CreateIssueCommandValidator : AbstractValidator<CreateIssueCommand>
 public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, ApiResponse<IssueDto>>
 {
     private readonly IRepository<Issue> _issueRepo;
+    private readonly IRepository<Label> _labelRepo;
+    private readonly IRepository<IssueLabel> _issueLabelRepo;
     private readonly IMapper _mapper;
     private readonly ILogger<CreateIssueCommandHandler> _logger;
     private readonly IValidator<CreateIssueCommand> _validator;
 
     public CreateIssueCommandHandler(
         IRepository<Issue> issueRepo,
+        IRepository<Label> labelRepo,
+        IRepository<IssueLabel> issueLabelRepo,
         IMapper mapper,
         IValidator<CreateIssueCommand> validator,
         ILogger<CreateIssueCommandHandler> logger)
     {
         _issueRepo = issueRepo;
+        _labelRepo = labelRepo;
+        _issueLabelRepo = issueLabelRepo;
         _mapper = mapper;
         _validator = validator;
         _logger = logger;
@@ -84,26 +90,65 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
                 return resp;
             }
 
-            // Use AutoMapper to map command to entity
-            var issue = _mapper.Map<Issue>(request);
+
+            // Create the issue
+            var issue = new Issue
+            {
+                Title = request.Title,
+                Description = request.Description,
+                ProjectId = request.ProjectId,
+                StatusId = request.StatusId,
+                PriorityId = request.PriorityId,
+                ReporterId = request.ReporterId,
+                AssigneeId = request.AssigneeId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
 
             await _issueRepo.AddAsync(issue);
             await _issueRepo.SaveChangesAsync(cancellationToken);
 
-            // Load the issue with navigation properties and map to DTO
+            // Create IssueLabel relationships if labels provided
+            if (request.LabelIds != null && request.LabelIds.Any())
+            {
+                // Validate that all label IDs exist
+                var existingLabelIds = await _labelRepo.Query()
+                    .Where(l => request.LabelIds.Contains(l.Id))
+                    .Select(l => l.Id)
+                    .ToListAsync(cancellationToken);
+
+                var validLabelIds = request.LabelIds.Where(id => existingLabelIds.Contains(id));
+
+                // Create IssueLabel entries
+                var issueLabels = validLabelIds.Select(labelId => new IssueLabel
+                {
+                    IssueId = issue.Id,
+                    LabelId = labelId
+                }).ToList();
+
+                if (issueLabels.Any())
+                {
+                    await _issueLabelRepo.AddRangeAsync(issueLabels);
+                    await _issueLabelRepo.SaveChangesAsync(cancellationToken);
+
+                    _logger.LogInformation("Added {Count} labels to issue {IssueId}",
+                        issueLabels.Count, issue.Id);
+                }
+            }
+
+            // Fetch the complete issue with all relationships
             var createdIssue = await _issueRepo.Query()
                 .Include(i => i.Reporter)
                 .Include(i => i.Assignee)
-                .Include(i => i.Project)
                 .Include(i => i.Status)
                 .Include(i => i.Priority)
+                .Include(i => i.Project)
                 .Include(i => i.IssueLabels)
                     .ThenInclude(il => il.Label)
                 .FirstAsync(i => i.Id == issue.Id, cancellationToken);
 
             var issueDto = _mapper.Map<IssueDto>(createdIssue);
 
-            _logger.LogInformation("Issue created successfully with ID: {IssueId}", issueDto.Id);
             return ApiResponse<IssueDto>.SuccessResponse(issueDto, 201, "Issue created successfully.");
         }
         catch (Exception ex)

@@ -27,6 +27,7 @@ public class GetAllIssuesQueryHandler : IRequestHandler<GetAllIssuesQuery, ApiRe
         _logger = logger;
     }
 
+    // In GetAllIssuesQueryHandler
     public async Task<ApiResponse<IEnumerable<IssueDto>>> Handle(GetAllIssuesQuery request, CancellationToken cancellationToken)
     {
         try
@@ -41,7 +42,30 @@ public class GetAllIssuesQueryHandler : IRequestHandler<GetAllIssuesQuery, ApiRe
                     .ThenInclude(il => il.Label)
                 .ToListAsync(cancellationToken);
 
+            // ✅ ADD DEBUGGING
+            foreach (var issue in issues)
+            {
+                _logger.LogInformation("Issue {IssueId}: {Title} has {LabelCount} labels",
+                    issue.Id, issue.Title, issue.IssueLabels?.Count ?? 0);
+
+                if (issue.IssueLabels != null && issue.IssueLabels.Any())
+                {
+                    foreach (var issueLabel in issue.IssueLabels)
+                    {
+                        _logger.LogInformation("  - Label: {LabelName} (ID: {LabelId})",
+                            issueLabel.Label?.Name, issueLabel.LabelId);
+                    }
+                }
+            }
+
             var issueDtos = _mapper.Map<IEnumerable<IssueDto>>(issues);
+
+            // ✅ ADD MORE DEBUGGING  
+            foreach (var dto in issueDtos)
+            {
+                _logger.LogInformation("Mapped Issue {IssueId}: {Title} has {LabelCount} label names: [{Labels}]",
+                    dto.Id, dto.Title, dto.Labels.Count, string.Join(", ", dto.Labels));
+            }
 
             _logger.LogInformation("Retrieved {Count} issues", issues.Count);
             return ApiResponse<IEnumerable<IssueDto>>.SuccessResponse(issueDtos, 200, "Issues retrieved successfully.");

@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Commands\Users\" />
     <Folder Include="Common\Extensions\" />
     <Folder Include="User\" />
   </ItemGroup>

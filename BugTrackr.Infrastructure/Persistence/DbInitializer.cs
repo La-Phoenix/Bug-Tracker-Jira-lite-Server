@@ -77,17 +77,16 @@ public static class DbInitializer
                     };
 
                     await context.Priorities.AddRangeAsync(priorities);
-                    await context.SaveChangesAsync(); // SAVE EACH SECTION
-                    logger.LogInformation("✅ Seeded Priorities");
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("✅ Priorities seeded successfully");
                 }
 
                 // Seed Projects (AFTER users are saved)
                 if (!await context.Projects.AnyAsync())
                 {
-                    // NOW we can safely query for the admin user
                     var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Role == "Admin");
 
-                    if (adminUser != null) // Check if admin user exists
+                    if (adminUser != null)
                     {
                         var projects = new[]
                         {
@@ -133,6 +132,9 @@ public static class DbInitializer
                     logger.LogInformation("✅ Labels seeded successfully");
                 }
 
+                // ENHANCED: Add ALL existing users to Sample Project
+                await EnsureAllUsersInSampleProject(context, logger);
+
                 logger.LogInformation("🎉 Database ready and seeded.");
                 return;
             }
@@ -144,4 +146,86 @@ public static class DbInitializer
             }
         }
     }
+
+    /// <summary>
+    /// Ensures ALL existing users are added to the Sample Project if they're not already members
+    /// </summary>
+    private static async Task EnsureAllUsersInSampleProject(BugTrackrDbContext context, ILogger logger)
+    {
+        try
+        {
+            // Get Sample Project
+            var sampleProject = await context.Projects
+                .FirstOrDefaultAsync(p => p.Name == "Sample Project");
+
+            if (sampleProject == null)
+            {
+                logger.LogWarning("⚠️ Sample Project not found, skipping user assignment");
+                return;
+            }
+
+            // Get all users
+            var allUsers = await context.Users.ToListAsync();
+
+            if (!allUsers.Any())
+            {
+                logger.LogWarning("⚠️ No users found in database");
+                return;
+            }
+
+            // Get existing ProjectUser relationships for Sample Project
+            var existingProjectUsers = await context.ProjectUsers
+                .Where(pu => pu.ProjectId == sampleProject.Id)
+                .Select(pu => pu.UserId)
+                .ToListAsync();
+
+            // Find users not yet in Sample Project
+            var usersNotInProject = allUsers
+                .Where(u => !existingProjectUsers.Contains(u.Id))
+                .ToList();
+
+            if (!usersNotInProject.Any())
+            {
+                logger.LogInformation("ℹ️ All users already in Sample Project ({Count} users)", allUsers.Count);
+                return;
+            }
+
+            // Create ProjectUser entries for users not in the project
+            var newProjectUsers = new List<ProjectUser>();
+
+            foreach (var user in usersNotInProject)
+            {
+                var roleInProject = user.Role == "Admin" ? "Owner" : "Member";
+
+                newProjectUsers.Add(new ProjectUser
+                {
+                    ProjectId = sampleProject.Id,
+                    UserId = user.Id,
+                    RoleInProject = roleInProject
+                });
+            }
+
+            // Add all new ProjectUser relationships
+            await context.ProjectUsers.AddRangeAsync(newProjectUsers);
+            await context.SaveChangesAsync();
+
+            logger.LogInformation("✅ Added {NewCount} users to Sample Project. Total users in project: {TotalCount}",
+                newProjectUsers.Count,
+                existingProjectUsers.Count + newProjectUsers.Count);
+
+            // Log details of added users
+            foreach (var projectUser in newProjectUsers)
+            {
+                var user = allUsers.First(u => u.Id == projectUser.UserId);
+                logger.LogInformation("   → Added {UserName} ({Email}) as {Role}",
+                    user.Name, user.Email, projectUser.RoleInProject);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "❌ Error adding users to Sample Project: {Message}", ex.Message);
+            throw;
+        }
+    }
 }
+

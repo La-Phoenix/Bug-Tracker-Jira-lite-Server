@@ -6,9 +6,9 @@ using BugTrackr.Application.DTOs.Priorities;
 using BugTrackr.Application.DTOs.Labels;
 using BugTrackr.Application.Dtos.Auth;
 using BugTrackr.Application.Commands.Auth;
-using BugTrackr.Application.Issues.Commands;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Application.Dtos.User;
+using BugTrackr.Application.Commands.Issues;
 
 namespace BugTrackr.Application.Mappings;
 
@@ -16,26 +16,38 @@ public class MappingProfile : Profile
 {
     public MappingProfile()
     {
-        // Issue mappings - Configure constructor mapping
+
+        //// Issue to IssueDto mapping
+        //CreateMap<Issue, IssueDto>()
+        //    .ConstructUsing(src => new IssueDto(
+        //        src.Id,
+        //        src.Title,
+        //        src.Description,
+        //        src.ReporterId,
+        //        src.Reporter.Name,
+        //        src.AssigneeId,
+        //        src.Assignee != null ? src.Assignee.Name : null,
+        //        src.ProjectId,
+        //        src.Project.Name,
+        //        src.StatusId,
+        //        src.Status.Name,
+        //        src.PriorityId,
+        //        src.Priority.Name,
+        //        src.CreatedAt,
+        //        src.UpdatedAt,
+        //        src.IssueLabels != null && src.IssueLabels.Any()
+        //            ? src.IssueLabels.Where(il => il.Label != null).Select(il => il.Label.Name).ToList()
+        //            : new List<string>()
+        //    ));
         CreateMap<Issue, IssueDto>()
-            .ConstructUsing(src => new IssueDto(
-                src.Id,
-                src.Title,
-                src.Description,
-                src.ReporterId,
-                src.Reporter.Name,
-                src.AssigneeId,
-                src.Assignee != null ? src.Assignee.Name : null,
-                src.ProjectId,
-                src.Project.Name,
-                src.StatusId,
-                src.Status.Name,
-                src.PriorityId,
-                src.Priority.Name,
-                src.CreatedAt,
-                src.UpdatedAt,
-                src.IssueLabels.Select(il => il.Label.Name).ToList()
-            ));
+        .ForCtorParam("ReporterName", opt => opt.MapFrom(src => src.Reporter.Name))
+        .ForCtorParam("AssigneeName", opt => opt.MapFrom(src => src.Assignee != null ? src.Assignee.Name : null))
+        .ForCtorParam("ProjectName", opt => opt.MapFrom(src => src.Project.Name))
+        .ForCtorParam("StatusName", opt => opt.MapFrom(src => src.Status.Name))
+        .ForCtorParam("PriorityName", opt => opt.MapFrom(src => src.Priority.Name))
+        .ForCtorParam("Labels", opt => opt.MapFrom(src =>
+        src.IssueLabels.Select(il => il.Label).ToList()
+    ));
 
         // CreateIssueCommand to Issue mapping
         CreateMap<CreateIssueCommand, Issue>()

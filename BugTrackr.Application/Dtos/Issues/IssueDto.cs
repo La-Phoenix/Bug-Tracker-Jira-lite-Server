@@ -1,4 +1,6 @@
-﻿namespace BugTrackr.Application.DTOs.Issues;
+﻿using BugTrackr.Application.DTOs.Labels;
+
+namespace BugTrackr.Application.DTOs.Issues;
 
 public record IssueDto(
     int Id,
@@ -16,5 +18,5 @@ public record IssueDto(
     string PriorityName,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    List<string> Labels
+    List<LabelDto> Labels
 );

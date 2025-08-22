@@ -1,7 +1,6 @@
 ﻿using BugTrackr.Application.Commands.Auth;
 using BugTrackr.Application.Common;
 using BugTrackr.Application.Dtos.Auth;
-using BugTrackr.Application.Exceptions;
 using BugTrackr.Application.Services.JWT;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Infrastructure.Persistence;
@@ -149,7 +148,6 @@ public class AuthController : ControllerBase
                 _logger.LogError("External authentication failed - Succeeded: {Succeeded}, Principal: {Principal}",
                     result?.Succeeded, result?.Principal != null ? "Present" : "Null");
 
-                // Log more details about the failure
                 if (result?.Failure != null)
                 {
                     _logger.LogError("Authentication failure details: {Failure}", result.Failure.Message);
@@ -176,11 +174,13 @@ public class AuthController : ControllerBase
                 return Redirect($"{errorReturnUrl}?error=missing_claims");
             }
 
-            // Check if user exists in database, if not create them
+            // Check if user exists in database
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            bool isNewUser = false;
 
             if (user == null)
             {
+                // Create new user
                 user = new User
                 {
                     Email = email,
@@ -192,7 +192,14 @@ public class AuthController : ControllerBase
 
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
+                isNewUser = true;
                 _logger.LogInformation("Created new user from external login: {Email}", email);
+            }
+
+            // ✅ AUTO-ADD NEW OAUTH USERS TO SAMPLE PROJECT
+            if (isNewUser)
+            {
+                await AddUserToSampleProject(user.Id);
             }
 
             var jwt = _jwt.GenerateToken(user);
@@ -214,6 +221,55 @@ public class AuthController : ControllerBase
             return Redirect($"{errorReturnUrl}?error=callback_error");
         }
     }
+
+    /// <summary>
+    /// Adds a user to the Sample Project if they're not already a member
+    /// </summary>
+    private async Task AddUserToSampleProject(int userId)
+    {
+        try
+        {
+            // Find Sample Project
+            var sampleProject = await _context.Projects
+                .FirstOrDefaultAsync(p => p.Name == "Sample Project");
+
+            if (sampleProject == null)
+            {
+                _logger.LogWarning("Sample Project not found, skipping auto-assignment for user {UserId}", userId);
+                return;
+            }
+
+            // Check if user is already in Sample Project
+            var existingProjectUser = await _context.ProjectUsers
+                .FirstOrDefaultAsync(pu => pu.ProjectId == sampleProject.Id && pu.UserId == userId);
+
+            if (existingProjectUser != null)
+            {
+                _logger.LogInformation("User {UserId} is already a member of Sample Project", userId);
+                return;
+            }
+
+            // Add user to Sample Project
+            var projectUser = new ProjectUser
+            {
+                ProjectId = sampleProject.Id,
+                UserId = userId,
+                RoleInProject = "Member"
+            };
+
+            _context.ProjectUsers.Add(projectUser);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("✅ Added OAuth user {UserId} to Sample Project as Member", userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding OAuth user {UserId} to Sample Project: {Message}", userId, ex.Message);
+            // Don't throw - we don't want OAuth login to fail because of project assignment
+        }
+    }
+
+
 
     private string GetValidReturnUrl(string returnUrl)
     {

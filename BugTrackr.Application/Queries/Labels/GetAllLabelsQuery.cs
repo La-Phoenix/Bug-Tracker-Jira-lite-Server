@@ -4,7 +4,6 @@ using BugTrackr.Application.DTOs.Labels;
 using BugTrackr.Application.Services;
 using BugTrackr.Domain.Entities;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BugTrackr.Application.Labels.Queries;
@@ -31,12 +30,10 @@ public class GetAllLabelsQueryHandler : IRequestHandler<GetAllLabelsQuery, ApiRe
     {
         try
         {
-            var labels = await _labelRepo.Query()
-                .ToListAsync(cancellationToken);
-
+            var labels = await _labelRepo.GetAllAsync();
             var labelDtos = _mapper.Map<IEnumerable<LabelDto>>(labels);
 
-            _logger.LogInformation("Retrieved {Count} labels", labels.Count);
+            _logger.LogInformation("Retrieved {Count} labels", labels.Count());
             return ApiResponse<IEnumerable<LabelDto>>.SuccessResponse(labelDtos, 200, "Labels retrieved successfully.");
         }
         catch (Exception ex)

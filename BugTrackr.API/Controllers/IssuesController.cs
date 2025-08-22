@@ -1,4 +1,5 @@
-﻿using BugTrackr.Application.Issues.Commands;
+﻿using BugTrackr.Application.Commands.Issues;
+using BugTrackr.Application.Issues.Commands;
 using BugTrackr.Application.Issues.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
@@ -44,15 +45,62 @@ public class IssuesController : ControllerBase
     }
 
     /// <summary>
-    /// Get issues by project ID
+    /// Get issues from all projects the current user is a member of
     /// </summary>
-    [HttpGet("project/{projectId:int}")]
-    public async Task<IActionResult> GetIssuesByProject(int projectId)
+    [HttpGet("my-projects-issues")]
+    public async Task<IActionResult> GetMyProjectsIssues(
+        [FromQuery] int? statusId = null,
+        [FromQuery] int? priorityId = null)
     {
-        _logger.LogInformation("Getting issues for project: {ProjectId}", projectId);
-        var result = await _mediator.Send(new GetIssuesByProjectQuery(projectId));
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return BadRequest("Invalid user ID in token");
+
+        _logger.LogInformation("Getting issues from all projects for user: {UserId}", userId);
+        var result = await _mediator.Send(new GetIssuesByUserProjectsQuery(userId, statusId, priorityId));
         return StatusCode(result.StatusCode, result);
     }
+
+    /// <summary>
+    /// Get issues by project ID with filtering options
+    /// </summary>
+    [HttpGet("project/{projectId:int}")]
+    public async Task<IActionResult> GetIssuesByProject(
+        int projectId,
+        [FromQuery] int? statusId = null,
+        [FromQuery] int? assigneeId = null,
+        [FromQuery] int? priorityId = null)
+    {
+        _logger.LogInformation("Getting issues for project: {ProjectId}", projectId);
+        var result = await _mediator.Send(new GetIssuesByProjectQuery(projectId, statusId, assigneeId, priorityId));
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Get issues by label ID
+    /// </summary>
+    [HttpGet("label/{labelId:int}")]
+    public async Task<IActionResult> GetIssuesByLabel(int labelId)
+    {
+        _logger.LogInformation("Getting issues for label: {LabelId}", labelId);
+        var result = await _mediator.Send(new GetIssuesByLabelQuery(labelId));
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Get current user's projects with issue counts
+    /// </summary>
+    //[HttpGet("my-projects-with-stats")]
+    //public async Task<IActionResult> GetMyProjectsWithStats()
+    //{
+    //    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    //    if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+    //        return BadRequest("Invalid user ID in token");
+
+    //    _logger.LogInformation("Getting projects with stats for user: {UserId}", userId);
+    //    var result = await _mediator.Send(new GetProjectsWithStatsByUserQuery(userId));
+    //    return StatusCode(result.StatusCode, result);
+    //}
 
     /// <summary>
     /// Create a new issue
@@ -62,6 +110,28 @@ public class IssuesController : ControllerBase
     {
         _logger.LogInformation("Creating new issue: {Title}", command.Title);
         var result = await _mediator.Send(command);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Add label to existing issue
+    /// </summary>
+    [HttpPost("{issueId:int}/labels/{labelId:int}")]
+    public async Task<IActionResult> AddLabelToIssue(int issueId, int labelId)
+    {
+        _logger.LogInformation("Adding label {LabelId} to issue {IssueId}", labelId, issueId);
+        var result = await _mediator.Send(new AddLabelToIssueCommand(issueId, labelId));
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Remove label from issue
+    /// </summary>
+    [HttpDelete("{issueId:int}/labels/{labelId:int}")]
+    public async Task<IActionResult> RemoveLabelFromIssue(int issueId, int labelId)
+    {
+        _logger.LogInformation("Removing label {LabelId} from issue {IssueId}", labelId, issueId);
+        var result = await _mediator.Send(new RemoveLabelFromIssueCommand(issueId, labelId));
         return StatusCode(result.StatusCode, result);
     }
 

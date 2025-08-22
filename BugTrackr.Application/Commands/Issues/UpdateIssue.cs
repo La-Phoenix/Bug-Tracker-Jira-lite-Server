@@ -9,7 +9,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
-namespace BugTrackr.Application.Issues.Commands;
+namespace BugTrackr.Application.Commands.Issues;
 
 public record UpdateIssueCommand(
     int Id,
@@ -51,17 +51,23 @@ public class UpdateIssueCommandValidator : AbstractValidator<UpdateIssueCommand>
 public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, ApiResponse<IssueDto>>
 {
     private readonly IRepository<Issue> _issueRepo;
+    private readonly IRepository<Label> _labelRepo;
+    private readonly IRepository<IssueLabel> _issueLabelRepo;
     private readonly IMapper _mapper;
     private readonly IValidator<UpdateIssueCommand> _validator;
     private readonly ILogger<UpdateIssueCommandHandler> _logger;
 
     public UpdateIssueCommandHandler(
         IRepository<Issue> issueRepo,
+        IRepository<Label> labelRepo,
+        IRepository<IssueLabel> issueLabelRepo,
         IMapper mapper,
         IValidator<UpdateIssueCommand> validator,
         ILogger<UpdateIssueCommandHandler> logger)
     {
         _issueRepo = issueRepo;
+        _labelRepo = labelRepo;
+        _issueLabelRepo = issueLabelRepo;
         _mapper = mapper;
         _validator = validator;
         _logger = logger;
@@ -86,7 +92,7 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
                 return ApiResponse<IssueDto>.Failure($"Issue with ID {request.Id} not found", 404);
             }
 
-            // Update specific properties (don't overwrite all)
+            // Update basic properties
             issue.Title = request.Title;
             issue.Description = request.Description;
             issue.AssigneeId = request.AssigneeId;
@@ -97,7 +103,13 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
             _issueRepo.Update(issue);
             await _issueRepo.SaveChangesAsync(cancellationToken);
 
-            // Load updated issue with navigation properties and map to DTO
+            // ✅ HANDLE LABEL UPDATES
+            if (request.LabelIds != null)
+            {
+                await UpdateIssueLabels(issue.Id, request.LabelIds, cancellationToken);
+            }
+
+            // Load updated issue with navigation properties
             var updatedIssue = await _issueRepo.Query()
                 .Include(i => i.Reporter)
                 .Include(i => i.Assignee)
@@ -119,4 +131,71 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
             return ApiResponse<IssueDto>.Failure("An unexpected error occurred.", 500);
         }
     }
+
+    /// <summary>
+    /// Updates the labels for an issue by removing all existing labels and adding new ones
+    /// </summary>
+    private async Task UpdateIssueLabels(int issueId, List<int> newLabelIds, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // 1. Remove all existing labels for this issue
+            var existingIssueLabels = await _issueLabelRepo.Query()
+                .Where(il => il.IssueId == issueId)
+                .ToListAsync(cancellationToken);
+
+            if (existingIssueLabels.Any())
+            {
+                foreach (var existingLabel in existingIssueLabels)
+                {
+                    _issueLabelRepo.Delete(existingLabel);
+                }
+                _logger.LogInformation("Removed {Count} existing labels from issue {IssueId}",
+                    existingIssueLabels.Count, issueId);
+            }
+
+            // 2. Add new labels if provided
+            if (newLabelIds.Any())
+            {
+                // Validate that all label IDs exist
+                var existingLabelIds = await _labelRepo.Query()
+                    .Where(l => newLabelIds.Contains(l.Id))
+                    .Select(l => l.Id)
+                    .ToListAsync(cancellationToken);
+
+                var validLabelIds = newLabelIds.Where(id => existingLabelIds.Contains(id)).ToList();
+
+                if (validLabelIds.Any())
+                {
+                    // Create new IssueLabel entries
+                    var newIssueLabels = validLabelIds.Select(labelId => new IssueLabel
+                    {
+                        IssueId = issueId,
+                        LabelId = labelId
+                    }).ToList();
+
+                    await _issueLabelRepo.AddRangeAsync(newIssueLabels);
+                    _logger.LogInformation("Added {Count} new labels to issue {IssueId}",
+                        newIssueLabels.Count, issueId);
+                }
+
+                var invalidLabelIds = newLabelIds.Except(existingLabelIds).ToList();
+                if (invalidLabelIds.Any())
+                {
+                    _logger.LogWarning("Ignored {Count} invalid label IDs for issue {IssueId}: {LabelIds}",
+                        invalidLabelIds.Count, issueId, string.Join(", ", invalidLabelIds));
+                }
+            }
+
+            // Save all label changes
+            await _issueLabelRepo.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating labels for issue {IssueId}: {Message}", issueId, ex.Message);
+            throw;
+        }
+    }
 }
+
+
