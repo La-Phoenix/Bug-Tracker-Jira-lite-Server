@@ -46,17 +46,20 @@ public class ProjectsController : ControllerBase
     /// <summary>
     /// Get projects for current user
     /// </summary>
-    //[HttpGet("my-projects")]
-    //public async Task<IActionResult> GetMyProjects()
-    //{
-    //    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-    //    if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
-    //        return BadRequest("Invalid user ID in token");
+    [HttpGet("my-projects/{userId:int?}")]
+    public async Task<IActionResult> GetMyProjects(int? userId)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId2))
+            return BadRequest("Invalid user ID in token");
 
-    //    _logger.LogInformation("Getting projects for user: {UserId}", userId);
-    //    var result = await _mediator.Send(new GetProjectsByUserQuery(userId));
-    //    return StatusCode(result.StatusCode, result);
-    //}
+        var finalUserId = userId ?? userId2;
+
+        _logger.LogInformation("Getting projects for user: {UserId}", finalUserId);
+
+        var result = await _mediator.Send(new GetProjectsByUserQuery(finalUserId));
+        return StatusCode(result.StatusCode, result);
+    }
 
     /// <summary>
     /// Get project members
