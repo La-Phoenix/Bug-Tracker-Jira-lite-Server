@@ -9,6 +9,8 @@ using BugTrackr.Application.Commands.Auth;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Application.Dtos.User;
 using BugTrackr.Application.Commands.Issues;
+using BugTrackr.Domain.Enums;
+using BugTrackr.Application.Dtos.Chat;
 
 namespace BugTrackr.Application.Mappings;
 
@@ -120,8 +122,62 @@ public class MappingProfile : Profile
                 src.Name,
                 src.Color
             ));
+
+        // Chat Room mappings
+        CreateMap<ChatRoom, ChatRoomDto>()
+            .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type.ToString().ToLowerInvariant()))
+            .ForMember(dest => dest.IsPinned, opt => opt.Ignore())
+            .ForMember(dest => dest.IsMuted, opt => opt.Ignore())
+            .ForMember(dest => dest.LastMessage, opt => opt.Ignore())
+            .ForMember(dest => dest.UnreadCount, opt => opt.Ignore())
+            .ForMember(dest => dest.Participants, opt => opt.MapFrom(src => src.Participants));
+
+        CreateMap<CreateChatRoomDto, ChatRoom>()
+            .ForMember(dest => dest.Id, opt => opt.Ignore())
+            .ForMember(dest => dest.Type, opt => opt.MapFrom(src => Enum.Parse<ChatRoomType>(src.Type, true)))
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+            .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+            .ForMember(dest => dest.CreatedBy, opt => opt.Ignore())
+            .ForMember(dest => dest.CreatedByUser, opt => opt.Ignore())
+            .ForMember(dest => dest.Project, opt => opt.Ignore())
+            .ForMember(dest => dest.Participants, opt => opt.Ignore())
+            .ForMember(dest => dest.Messages, opt => opt.Ignore());
+
+        // Chat Participant mappings
+        CreateMap<ChatParticipant, ChatParticipantDto>()
+            .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User.Name))
+            .ForMember(dest => dest.UserEmail, opt => opt.MapFrom(src => src.User.Email))
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role.ToString()))
+            .ForMember(dest => dest.IsOnline, opt => opt.Ignore());
+
+        // Chat Message mappings
+        CreateMap<ChatMessage, ChatMessageDto>()
+            .ForMember(dest => dest.SenderName, opt => opt.MapFrom(src => src.Sender.Name))
+            .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type.ToString().ToLowerInvariant()))
+            .ForMember(dest => dest.ReplyToMessage, opt => opt.MapFrom(src => src.ReplyToMessage))
+            .ForMember(dest => dest.MessageStatuses, opt => opt.MapFrom(src => src.MessageStatuses));
+
+        CreateMap<SendMessageDto, ChatMessage>()
+            .ForMember(dest => dest.Id, opt => opt.Ignore())
+            .ForMember(dest => dest.Type, opt => opt.MapFrom(src => Enum.Parse<ChatMessageType>(src.Type, true)))
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+            .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+            .ForMember(dest => dest.IsEdited, opt => opt.MapFrom(src => false))
+            .ForMember(dest => dest.EditedAt, opt => opt.Ignore())
+            .ForMember(dest => dest.RoomId, opt => opt.Ignore())
+            .ForMember(dest => dest.SenderId, opt => opt.Ignore())
+            .ForMember(dest => dest.FileUrl, opt => opt.Ignore())
+            .ForMember(dest => dest.FileName, opt => opt.Ignore())
+            .ForMember(dest => dest.FileSize, opt => opt.Ignore())
+            .ForMember(dest => dest.Room, opt => opt.Ignore())
+            .ForMember(dest => dest.Sender, opt => opt.Ignore())
+            .ForMember(dest => dest.ReplyToMessage, opt => opt.Ignore())
+            .ForMember(dest => dest.MessageStatuses, opt => opt.Ignore());
+
+        // Message Status mappings
+        CreateMap<MessageStatus, MessageStatusDto>()
+            .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString().ToLowerInvariant()));
     }
 }
-
 
 

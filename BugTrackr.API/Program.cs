@@ -19,6 +19,8 @@ using BugTrackr.Application.Services.JWT;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
+using BugTrackr.Infrastructure.Chat;
+using BugTrackr.Infrastructure.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,6 +50,15 @@ builder.Services.AddDbContext<BugTrackrDbContext>(options =>
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+// Add SignalR service
+builder.Services.AddSignalR(options =>
+{
+    // Enable detailed errors in development
+    options.EnableDetailedErrors = !builder.Environment.IsProduction();
+});
+
+// Register the notification service
+builder.Services.AddScoped<IChatNotificationService, ChatNotificationService>();
 
 // Configure forwarded headers for Render deployment
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -122,6 +133,26 @@ authBuilder.AddJwtBearer(options =>
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtSettings["Key"]!)),
         ClockSkew = TimeSpan.FromMinutes(5)
+    };
+
+    // Add SignalR JWT support
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // If the request is for our hub...
+            var path = context.HttpContext.Request.Path;
+            if (path.StartsWithSegments("/chatHub"))
+            {
+                // Read the token out of the query string
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken))
+                {
+                    context.Token = accessToken;
+                }
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -387,6 +418,7 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHub<ChatHub>("/chatHub");
 app.MapControllers();
 
 app.Run();

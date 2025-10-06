@@ -2,11 +2,8 @@
 
   <ItemGroup>
     <Compile Remove="Interfaces\**" />
-    <Compile Remove="NewFolder\**" />
     <EmbeddedResource Remove="Interfaces\**" />
-    <EmbeddedResource Remove="NewFolder\**" />
     <None Remove="Interfaces\**" />
-    <None Remove="NewFolder\**" />
   </ItemGroup>
 
   <ItemGroup>

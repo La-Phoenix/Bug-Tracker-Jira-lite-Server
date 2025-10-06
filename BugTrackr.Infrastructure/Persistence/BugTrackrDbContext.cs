@@ -22,6 +22,12 @@ public class BugTrackrDbContext : DbContext
     public DbSet<IssueLabel> IssueLabels => Set<IssueLabel>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<ChatRoom> ChatRooms { get; set; }
+    public DbSet<ChatParticipant> ChatParticipants { get; set; }
+    public DbSet<ChatMessage> ChatMessages { get; set; }
+    public DbSet<MessageStatus> MessageStatuses { get; set; }
+    public DbSet<TypingStatus> TypingStatuses { get; set; }
+
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -51,6 +57,108 @@ public class BugTrackrDbContext : DbContext
             .WithMany(u => u.AssignedIssues)
             .HasForeignKey(i => i.AssigneeId)
             .OnDelete(DeleteBehavior.SetNull); // optional relationship
+                                               // Chat Room Configuration
+        modelBuilder.Entity<ChatRoom>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .IsRequired();
 
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Project)
+                .WithMany()
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Chat Participant Configuration
+        modelBuilder.Entity<ChatParticipant>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.RoomId, e.UserId }).IsUnique();
+
+            entity.Property(e => e.Role)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.HasOne(e => e.Room)
+                .WithMany(r => r.Participants)
+                .HasForeignKey(e => e.RoomId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Chat Message Configuration
+        modelBuilder.Entity<ChatMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Type)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.HasOne(e => e.Room)
+                .WithMany(r => r.Messages)
+                .HasForeignKey(e => e.RoomId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Sender)
+                .WithMany()
+                .HasForeignKey(e => e.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ReplyToMessage)
+                .WithMany()
+                .HasForeignKey(e => e.ReplyToId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Message Status Configuration
+        modelBuilder.Entity<MessageStatus>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.MessageId, e.UserId }).IsUnique();
+
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .IsRequired();
+
+            entity.HasOne(e => e.Message)
+                .WithMany(m => m.MessageStatuses)
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Typing Status Configuration
+        modelBuilder.Entity<TypingStatus>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.RoomId, e.UserId }).IsUnique();
+
+            entity.HasOne(e => e.Room)
+                .WithMany()
+                .HasForeignKey(e => e.RoomId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

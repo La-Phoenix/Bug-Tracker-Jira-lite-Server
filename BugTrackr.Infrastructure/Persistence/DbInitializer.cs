@@ -135,6 +135,43 @@ public static class DbInitializer
                 // ENHANCED: Add ALL existing users to Sample Project
                 await EnsureAllUsersInSampleProject(context, logger);
 
+                // Seed Chat data for testing
+                if (!context.ChatRooms.Any())
+                {
+                    var adminUser = context.Users.First(u => u.Role == "Admin");
+                    var sampleProject = context.Projects.First(p => p.Name == "Sample Project");
+
+                    var projectChatRoom = new ChatRoom
+                    {
+                        Name = "Sample Project Discussion",
+                        Type = BugTrackr.Domain.Enums.ChatRoomType.Project,
+                        Description = "General discussion for Sample Project",
+                        ProjectId = sampleProject.Id,
+                        CreatedBy = adminUser.Id,
+                        IsPrivate = false,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+
+                    context.ChatRooms.Add(projectChatRoom);
+                    context.SaveChanges();
+
+                    // Add all users as participants
+                    var allUsers = context.Users.ToList();
+                    var participants = allUsers.Select(user => new BugTrackr.Domain.Entities.ChatParticipant
+                    {
+                        RoomId = projectChatRoom.Id,
+                        UserId = user.Id,
+                        Role = user.Role == "Admin" ? BugTrackr.Domain.Enums.ChatParticipantRole.Admin : BugTrackr.Domain.Enums.ChatParticipantRole.Member,
+                        JoinedAt = DateTime.UtcNow,
+                        IsPinned = false,
+                        IsMuted = false
+                    });
+
+                    context.ChatParticipants.AddRange(participants);
+                    context.SaveChanges();
+                }
+
                 logger.LogInformation("🎉 Database ready and seeded.");
                 return;
             }
