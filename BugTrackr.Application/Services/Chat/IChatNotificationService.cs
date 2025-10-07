@@ -10,4 +10,6 @@ public interface IChatNotificationService
     Task NotifyParticipantAdded(int roomId, ChatParticipantDto participant);
     Task NotifyParticipantRemoved(int roomId, int userId);
     Task NotifyRoomUpdated(ChatRoomDto room);
+    Task NotifyRoomCreated(ChatRoomDto room);
+    Task NotifyRemovedFromRoom(int roomId, int participantUserId);
 }

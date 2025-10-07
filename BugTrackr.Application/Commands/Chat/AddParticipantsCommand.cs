@@ -30,6 +30,7 @@ public class AddParticipantsCommandHandler : IRequestHandler<AddParticipantsComm
     private readonly IRepository<ChatParticipant> _participantRepository;
     private readonly IRepository<ChatRoom> _roomRepository;
     private readonly IRepository<User> _userRepository;
+    private readonly IChatNotificationService _notificationService;
     private readonly IValidator<AddParticipantsCommand> _validator;
     private readonly ILogger<AddParticipantsCommandHandler> _logger;
 
@@ -37,12 +38,14 @@ public class AddParticipantsCommandHandler : IRequestHandler<AddParticipantsComm
         IRepository<ChatParticipant> participantRepository,
         IRepository<ChatRoom> roomRepository,
         IRepository<User> userRepository,
+        IChatNotificationService notificationService,
         IValidator<AddParticipantsCommand> validator,
         ILogger<AddParticipantsCommandHandler> logger)
     {
         _participantRepository = participantRepository;
         _roomRepository = roomRepository;
         _userRepository = userRepository;
+        _notificationService = notificationService;
         _validator = validator;
         _logger = logger;
     }
@@ -130,6 +133,11 @@ public class AddParticipantsCommandHandler : IRequestHandler<AddParticipantsComm
                 IsPinned = p.IsPinned,
                 IsMuted = p.IsMuted
             }).ToList();
+
+            foreach (var participant in participantDtos)
+            {
+                await _notificationService.NotifyParticipantAdded(request.RoomId, participant);
+            }
 
             return ApiResponse<List<ChatParticipantDto>>.SuccessResponse(participantDtos, 201, "Participants added successfully");
         }

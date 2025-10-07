@@ -44,11 +44,28 @@ public class ChatNotificationService : IChatNotificationService
             .SendAsync("ParticipantAdded", new { RoomId = roomId, Participant = participant });
     }
 
+    public async Task NotifyRoomCreated(ChatRoomDto room)
+    {
+        foreach (var participant in room.Participants)
+        {
+            await _hubContext.Clients.User(participant.UserId.ToString())
+                .SendAsync("RoomCreated", new { Room = room });
+        }
+    }
+
+
     public async Task NotifyParticipantRemoved(int roomId, int userId)
     {
         await _hubContext.Clients.Group($"room_{roomId}")
             .SendAsync("ParticipantRemoved", new { RoomId = roomId, UserId = userId });
     }
+    public async Task NotifyRemovedFromRoom(int roomId, int participantUserId)
+    {
+        await _hubContext.Clients.User(participantUserId.ToString())
+                .SendAsync("RemovedFromRoom", new { RoomId = roomId });
+    }
+
+
 
     public async Task NotifyRoomUpdated(ChatRoomDto room)
     {

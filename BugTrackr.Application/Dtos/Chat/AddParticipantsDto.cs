@@ -2,4 +2,5 @@
 public class AddParticipantsDto
 {
     public List<int> UserIds { get; set; } = new();
+    public int RequesterId { get; set; }
 }

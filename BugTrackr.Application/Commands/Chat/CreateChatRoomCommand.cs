@@ -48,6 +48,7 @@ public class CreateChatRoomCommandHandler : IRequestHandler<CreateChatRoomComman
     private readonly IRepository<ChatRoom> _roomRepository;
     private readonly IRepository<ChatParticipant> _participantRepository;
     private readonly IRepository<User> _userRepository;
+    public readonly IChatNotificationService _notificationService;
     private readonly IValidator<CreateChatRoomCommand> _validator;
     private readonly ILogger<CreateChatRoomCommandHandler> _logger;
 
@@ -55,11 +56,13 @@ public class CreateChatRoomCommandHandler : IRequestHandler<CreateChatRoomComman
         IRepository<ChatRoom> roomRepository,
         IRepository<ChatParticipant> participantRepository,
         IRepository<User> userRepository,
+        IChatNotificationService notificationService,
         IValidator<CreateChatRoomCommand> validator,
         ILogger<CreateChatRoomCommandHandler> logger)
     {
         _roomRepository = roomRepository;
         _participantRepository = participantRepository;
+        _notificationService = notificationService;
         _userRepository = userRepository;
         _validator = validator;
         _logger = logger;
@@ -132,8 +135,9 @@ public class CreateChatRoomCommandHandler : IRequestHandler<CreateChatRoomComman
                 .ThenInclude(p => p.User)
                 .FirstOrDefaultAsync(r => r.Id == chatRoom.Id, cancellationToken);
 
-            var roomDto = MapToDto(createdRoom!);
 
+            var roomDto = MapToDto(createdRoom!);
+            await _notificationService.NotifyRoomCreated(roomDto);
             return ApiResponse<ChatRoomDto>.SuccessResponse(roomDto, 201, "Chat room created successfully");
         }
         catch (Exception ex)

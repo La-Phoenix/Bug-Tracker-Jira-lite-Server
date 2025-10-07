@@ -25,15 +25,18 @@ public class RemoveParticipantCommandHandler : IRequestHandler<RemoveParticipant
 {
     private readonly IRepository<ChatParticipant> _participantRepository;
     private readonly IValidator<RemoveParticipantCommand> _validator;
+    public readonly IChatNotificationService _notificationService;
     private readonly ILogger<RemoveParticipantCommandHandler> _logger;
 
     public RemoveParticipantCommandHandler(
         IRepository<ChatParticipant> participantRepository,
+        IChatNotificationService notificationService,
         IValidator<RemoveParticipantCommand> validator,
         ILogger<RemoveParticipantCommandHandler> logger)
     {
         _participantRepository = participantRepository;
         _validator = validator;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -80,6 +83,12 @@ public class RemoveParticipantCommandHandler : IRequestHandler<RemoveParticipant
 
             _participantRepository.Delete(participantToRemove);
             await _participantRepository.SaveChangesAsync(cancellationToken);
+
+            // ✅ Notify everyone in the room about removal
+            await _notificationService.NotifyParticipantRemoved(request.RoomId, request.ParticipantUserId);
+
+            // ✅ Notify the removed user directly so they can leave the room view
+            await _notificationService.NotifyRemovedFromRoom(request.RoomId, request.ParticipantUserId);
 
             _logger.LogInformation("Removed participant {UserId} from room {RoomId}", request.ParticipantUserId, request.RoomId);
             return ApiResponse<string>.SuccessResponse("Participant removed successfully", 200);
