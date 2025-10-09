@@ -349,6 +349,10 @@ else
     builder.Logging.SetMinimumLevel(LogLevel.Debug);
 }
 
+// Add health checks service
+builder.Services.AddHealthChecks();
+
+
 var app = builder.Build();
 
 // Use forwarded headers - MUST be first middleware in production
@@ -418,6 +422,10 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map health check endpoint - unprotected
+app.MapHealthChecks("/health");
+
 app.MapHub<ChatHub>("/chatHub");
 app.MapControllers();
 
