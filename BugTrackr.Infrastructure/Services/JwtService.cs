@@ -6,6 +6,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
+namespace BugTrackr.Infrastructure.Services;
+
 public class JwtService : IJwtService
 {
     private readonly JwtSettings _jwtSettings;

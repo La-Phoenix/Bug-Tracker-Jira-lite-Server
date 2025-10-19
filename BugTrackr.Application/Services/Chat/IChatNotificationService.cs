@@ -1,6 +1,6 @@
 ﻿using BugTrackr.Application.Dtos.Chat;
 
-namespace BugTrackr.Application.Services;
+namespace BugTrackr.Application.Services.Chat;
 
 public interface IChatNotificationService
 {

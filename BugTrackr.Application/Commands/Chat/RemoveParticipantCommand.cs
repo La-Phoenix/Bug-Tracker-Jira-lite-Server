@@ -1,5 +1,6 @@
 ﻿using BugTrackr.Application.Common;
 using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.Chat;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Domain.Enums;
 using FluentValidation;

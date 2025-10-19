@@ -18,38 +18,27 @@ public class MappingProfile : Profile
 {
     public MappingProfile()
     {
+        // User profile mappings
+        CreateMap<User, UserProfileDto>();
+        CreateMap<UpdateProfileDto, User>();
 
-        //// Issue to IssueDto mapping
-        //CreateMap<Issue, IssueDto>()
-        //    .ConstructUsing(src => new IssueDto(
-        //        src.Id,
-        //        src.Title,
-        //        src.Description,
-        //        src.ReporterId,
-        //        src.Reporter.Name,
-        //        src.AssigneeId,
-        //        src.Assignee != null ? src.Assignee.Name : null,
-        //        src.ProjectId,
-        //        src.Project.Name,
-        //        src.StatusId,
-        //        src.Status.Name,
-        //        src.PriorityId,
-        //        src.Priority.Name,
-        //        src.CreatedAt,
-        //        src.UpdatedAt,
-        //        src.IssueLabels != null && src.IssueLabels.Any()
-        //            ? src.IssueLabels.Where(il => il.Label != null).Select(il => il.Label.Name).ToList()
-        //            : new List<string>()
-        //    ));
+        // Notification preferences mappings
+        CreateMap<User, NotificationPreferencesDto>();
+        CreateMap<NotificationPreferencesDto, User>();
+
+        // User preferences mappings
+        CreateMap<User, UserPreferencesDto>();
+        CreateMap<UserPreferencesDto, User>();
+
         CreateMap<Issue, IssueDto>()
-        .ForCtorParam("ReporterName", opt => opt.MapFrom(src => src.Reporter.Name))
-        .ForCtorParam("AssigneeName", opt => opt.MapFrom(src => src.Assignee != null ? src.Assignee.Name : null))
-        .ForCtorParam("ProjectName", opt => opt.MapFrom(src => src.Project.Name))
-        .ForCtorParam("StatusName", opt => opt.MapFrom(src => src.Status.Name))
-        .ForCtorParam("PriorityName", opt => opt.MapFrom(src => src.Priority.Name))
-        .ForCtorParam("Labels", opt => opt.MapFrom(src =>
-        src.IssueLabels.Select(il => il.Label).ToList()
-    ));
+            .ForCtorParam("ReporterName", opt => opt.MapFrom(src => src.Reporter.Name))
+            .ForCtorParam("AssigneeName", opt => opt.MapFrom(src => src.Assignee != null ? src.Assignee.Name : null))
+            .ForCtorParam("ProjectName", opt => opt.MapFrom(src => src.Project.Name))
+            .ForCtorParam("StatusName", opt => opt.MapFrom(src => src.Status.Name))
+            .ForCtorParam("PriorityName", opt => opt.MapFrom(src => src.Priority.Name))
+            .ForCtorParam("Labels", opt => opt.MapFrom(src =>
+            src.IssueLabels.Select(il => il.Label).ToList()
+        ));
 
         // CreateIssueCommand to Issue mapping
         CreateMap<CreateIssueCommand, Issue>()
@@ -76,7 +65,17 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.AssignedIssues, opt => opt.Ignore());
 
         CreateMap<User, AuthResponseDto>()
-            .ForMember(dest => dest.Token, opt => opt.Ignore()); // Token set separately
+            .ForMember(dest => dest.Token, opt => opt.Ignore()) // Token set separately
+            .ForMember(dest => dest.Name, opt => opt.MapFrom(src => src.Name))
+            .ForMember(dest => dest.Email, opt => opt.MapFrom(src => src.Email))
+            .ForMember(dest => dest.Role, opt => opt.MapFrom(src => src.Role))
+            .ForMember(dest => dest.Avatar, opt => opt.MapFrom(src => src.Avatar))
+            .ForMember(dest => dest.Company, opt => opt.MapFrom(src => src.Company))
+            .ForMember(dest => dest.Language, opt => opt.MapFrom(src => src.Language ?? "en"))
+            .ForMember(dest => dest.Theme, opt => opt.MapFrom(src => src.Theme ?? "system"))
+            .ForMember(dest => dest.FontSize, opt => opt.MapFrom(src => src.FontSize ?? "medium"))
+            .ForMember(dest => dest.AnimationsEnabled, opt => opt.MapFrom(src => src.AnimationsEnabled))
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => src.CreatedAt));
 
         // User mappings
         CreateMap<User, UserDto>()

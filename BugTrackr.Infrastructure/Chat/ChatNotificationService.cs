@@ -1,5 +1,5 @@
 ﻿using BugTrackr.Application.Dtos.Chat;
-using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.Chat;
 using BugTrackr.Infrastructure.Hubs;
 using Microsoft.AspNetCore.SignalR;
 

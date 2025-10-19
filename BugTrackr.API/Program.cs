@@ -21,6 +21,9 @@ using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
 using BugTrackr.Infrastructure.Chat;
 using BugTrackr.Infrastructure.Hubs;
+using BugTrackr.Application.Services.Cloudinary;
+using BugTrackr.Infrastructure.Services;
+using BugTrackr.Application.Services.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,7 +52,10 @@ builder.Services.AddDbContext<BugTrackrDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+// Add Cloudinary service
+builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+
 // Add SignalR service
 builder.Services.AddSignalR(options =>
 {
