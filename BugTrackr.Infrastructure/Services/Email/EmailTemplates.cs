@@ -1,4 +1,5 @@
 ﻿using BugTrackr.Domain.Entities;
+using System.Linq;
 
 namespace BugTrackr.Infrastructure.Services.Email;
 
@@ -116,63 +117,78 @@ public static class EmailTemplates
     public static (string subject, string html, string text) IssueAssignedEmail(User assignee, Issue issue, User assignedBy)
     {
         var subject = $"Issue Assigned: {issue.Title}";
+
+        // ✅ Fix: Extract label names from the collection
+        var labelNames = issue.IssueLabels?.Select(il => il.Label?.Name).Where(name => !string.IsNullOrEmpty(name)) ?? new List<string>();
+        var labelsString = labelNames.Any() ? string.Join(", ", labelNames) : "None";
+
         var html = $@"
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #10b981; color: white; padding: 20px; text-align: center; }}
-                .content {{ padding: 30px; background: #f8fafc; }}
-                .issue-details {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }}
-                .button {{ display: inline-block; background: #10b981; color: white; padding: 12px 24px; 
-                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
-                .priority-{issue.Priority.Name.ToLower()} {{ color: {GetPriorityColor(issue.Priority.Name)}; font-weight: bold; }}
-            </style>
-        </head>
-        <body>
-            <div class=""container"">
-                <div class=""header"">
-                    <h1>New Issue Assigned</h1>
-                </div>
-                <div class=""content"">
-                    <h2>Hello {assignee.Name}!</h2>
-                    <p>You have been assigned a new issue by {assignedBy.Name}.</p>
-            
-                    <div class=""issue-details"">
-                        <h3>{issue.Title}</h3>
-                        <p><strong>Description:</strong> {issue.Description}</p>
-                        <p><strong>Priority:</strong> <span class=""priority-{issue.Priority.Name.ToLower()}"">{issue.Priority}</span></p>
-                        <p><strong>Status:</strong> {issue.Status}</p>
-                        <p><strong>Due Date:</strong> {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}</p>
-                    </div>
-            
-                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
-            
-                    <p>Best regards,<br>The BugTrackr Team</p>
-                </div>
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #10b981; color: white; padding: 20px; text-align: center; }}
+        .content {{ padding: 30px; background: #f8fafc; }}
+        .issue-details {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+        .button {{ display: inline-block; background: #10b981; color: white; padding: 12px 24px; 
+                   text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+        .priority-{issue.Priority?.Name?.ToLower() ?? "medium"} {{ color: {GetPriorityColor(issue.Priority?.Name ?? "Medium")}; font-weight: bold; }}
+        .labels {{ margin-top: 10px; }}
+        .label-tag {{ display: inline-block; background: #e5e7eb; color: #374151; padding: 2px 8px; 
+                     border-radius: 12px; font-size: 0.8em; margin-right: 5px; }}
+    </style>
+</head>
+<body>
+    <div class=""container"">
+        <div class=""header"">
+            <h1>New Issue Assigned</h1>
+        </div>
+        <div class=""content"">
+            <h2>Hello {assignee.Name}!</h2>
+            <p>You have been assigned a new issue by {assignedBy.Name}.</p>
+    
+            <div class=""issue-details"">
+                <h3>{issue.Title}</h3>
+                <p><strong>Description:</strong> {issue.Description}</p>
+                <p><strong>Priority:</strong> <span class=""priority-{issue.Priority?.Name?.ToLower() ?? "medium"}"">{issue.Priority?.Name ?? "Medium"}</span></p>
+                <p><strong>Status:</strong> {issue.Status?.Name ?? "Open"}</p>
+                <p><strong>Due Date:</strong> {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}</p>
+                
+                {(labelNames.Any() ? $@"
+                <div class=""labels"">
+                    <strong>🏷️ Labels:</strong><br>
+                    {string.Join("", issue.IssueLabels.Where(il => il.Label != null).Select(il => $"<span class=""label-tag"" style=""background-color: {il.Label.Color}; color: white;"">{il.Label.Name}</span>"))}
+                </div>" : "")}
             </div>
-        </body>
-        </html>";
+    
+            <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
+    
+            <p>Best regards,<br>The BugTrackr Team</p>
+        </div>
+    </div>
+</body>
+</html>";
 
         var text = $@"New Issue Assigned
 
-        Hello {assignee.Name}!
+Hello {assignee.Name}!
 
-        You have been assigned a new issue by {assignedBy.Name}.
+You have been assigned a new issue by {assignedBy.Name}.
 
-        Issue Details:
-        - Title: {issue.Title}
-        - Description: {issue.Description}
-        - Priority: {issue.Priority}
-        - Status: {issue.Status}
-        - Due Date: {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}
+Issue Details:
+- Title: {issue.Title}
+- Description: {issue.Description}
+- Priority: {issue.Priority?.Name ?? "Medium"}
+- Status: {issue.Status?.Name ?? "Open"}
+- Labels: {labelsString}
+- Due Date: {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}
 
-        View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
+View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
 
-        Best regards,
-        The BugTrackr Team";
+Best regards,
+The BugTrackr Team";
 
         return (subject, html, text);
     }
@@ -429,6 +445,9 @@ public static class EmailTemplates
         var priorityColor = GetPriorityColor(issue.Priority?.Name ?? "Medium");
         var subject = $"New Issue Created: {issue.Title}";
 
+        var labelNames = issue.IssueLabels?.Select(il => il.Label?.Name).Where(name => !string.IsNullOrEmpty(name)) ?? new List<string>();
+        var labelsString = labelNames.Any() ? string.Join(", ", labelNames) : "None";
+
         var html = $@"
         <!DOCTYPE html>
         <html>
@@ -445,6 +464,10 @@ public static class EmailTemplates
                 .meta-info {{ background: #f1f5f9; padding: 15px; border-radius: 5px; margin: 15px 0; }}
                 .status-badge {{ display: inline-block; background: #10b981; color: white; padding: 4px 8px; 
                                 border-radius: 12px; font-size: 0.8em; }}
+                .high-priority {{ background: #fef2f2; border-left: 4px solid #ef4444; }}
+                .labels {{ margin-top: 10px; }}
+                .label-tag {{ display: inline-block; background: #e5e7eb; color: #374151; padding: 2px 8px; 
+                             border-radius: 12px; font-size: 0.8em; margin-right: 5px; }}
             </style>
         </head>
         <body>
@@ -454,24 +477,33 @@ public static class EmailTemplates
                 </div>
                 <div class=""content"">
                     <h2>Hello {user.Name}!</h2>
-                    <p>A new issue has been created in project <strong>{issue.Project?.Name}</strong> by {reporter.Name}.</p>
+                    <p>A new issue has been created in project <strong>{issue.Project?.Name}</strong> by <strong>{reporter.Name}</strong>.</p>
             
-                    <div class=""issue-details"">
+                    <div class=""issue-details {(issue.Priority?.Name == "High" || issue.Priority?.Name == "Critical" ? "high-priority" : "")}"">
                         <h3>📋 {issue.Title}</h3>
                         <p><strong>Description:</strong></p>
                         <p>{issue.Description ?? "No description provided"}</p>
                 
                         <div class=""meta-info"">
-                            <p><strong>Priority:</strong> <span class=""priority"">{issue.Priority?.Name ?? "Medium"}</span></p>
-                            <p><strong>Status:</strong> <span class=""status-badge"">{issue.Status?.Name ?? "Open"}</span></p>
-                            <p><strong>Type:</strong> {"Task"}</p>
-                            <p><strong>Reported by:</strong> {reporter.Name}</p>
-                            {(issue.AssigneeId.HasValue ? $"<p><strong>Assigned to:</strong> {issue.Assignee?.Name}</p>" : "")}
-                            <p><strong>Created:</strong> {issue.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}</p>
+                            <p><strong>🎯 Priority:</strong> <span class=""priority"">{issue.Priority?.Name ?? "Medium"}</span></p>
+                            <p><strong>📊 Status:</strong> <span class=""status-badge"">{issue.Status?.Name ?? "Open"}</span></p>
+                            <p><strong>👤 Reported by:</strong> {reporter.Name} ({reporter.Email})</p>
+                            {(issue.AssigneeId.HasValue ? $"<p><strong>👥 Assigned to:</strong> {issue.Assignee?.Name}</p>" : "<p><strong>👥 Assigned to:</strong> Unassigned</p>")}
+                            <p><strong>📅 Created:</strong> {issue.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}</p>
+                            {(issue.DueDate.HasValue ? $"<p><strong>⏰ Due Date:</strong> {issue.DueDate.Value:MMM dd, yyyy}</p>" : "")}
                         </div>
+
+                        {(labelNames.Any() ? $@"
+                        <div class=""labels"">
+                            <strong>🏷️ Labels:</strong><br>
+                            {string.Join("", issue.IssueLabels.Where(il => il.Label != null).Select(il => $"<span class=""label-tag"" style=""background-color: {il.Label.Color}; color: white;"">{il.Label.Name}</span>"))}
+                        </div>" : "")}
                     </div>
             
-                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
+                    {(issue.Priority?.Name == "High" || issue.Priority?.Name == "Critical" ?
+                            "<p style='color: #ef4444; font-weight: bold;'>⚠️ This is a high priority issue that requires immediate attention!</p>" : "")}
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue Details</a>
             
                     <p>Stay updated with your project progress!</p>
                     <p>Best regards,<br>The BugTrackr Team</p>
@@ -491,10 +523,14 @@ public static class EmailTemplates
         - Description: {issue.Description ?? "No description provided"}
         - Priority: {issue.Priority?.Name ?? "Medium"}
         - Status: {issue.Status?.Name ?? "Open"}
-        - Type: {"Task"}
-        - Reported by: {reporter.Name}
-        {(issue.AssigneeId.HasValue ? $"- Assigned to: {issue.Assignee?.Name}" : "")}
+        - Labels: {labelsString}
+        - Reported by: {reporter.Name} ({reporter.Email})
+        {(issue.AssigneeId.HasValue ? $"- Assigned to: {issue.Assignee?.Name}" : "- Assigned to: Unassigned")}
         - Created: {issue.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}
+        {(issue.DueDate.HasValue ? $"- Due Date: {issue.DueDate.Value:MMM dd, yyyy}" : "")}
+
+        {(issue.Priority?.Name == "High" || issue.Priority?.Name == "Critical" ?
+                "⚠️ This is a high priority issue that requires immediate attention!" : "")}
 
         View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
 
