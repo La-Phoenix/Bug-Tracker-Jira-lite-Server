@@ -17,13 +17,14 @@ using Microsoft.AspNetCore.DataProtection;
 using BugTrackr.Application.Services.Auth;
 using BugTrackr.Application.Services.JWT;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
 using BugTrackr.Infrastructure.Chat;
 using BugTrackr.Infrastructure.Hubs;
 using BugTrackr.Application.Services.Cloudinary;
 using BugTrackr.Infrastructure.Services;
 using BugTrackr.Application.Services.Chat;
+using BugTrackr.Application.Services.Email;
+using BugTrackr.Infrastructure.Services.Email;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,6 +66,15 @@ builder.Services.AddSignalR(options =>
 
 // Register the notification service
 builder.Services.AddScoped<IChatNotificationService, ChatNotificationService>();
+
+// Configure MailJet Settings
+builder.Services.Configure<MailJetSettings>(builder.Configuration.GetSection("MailJet"));
+
+// Register Email Service
+builder.Services.AddScoped<IEmailService, MailjetEmailService>();
+
+// Register background services
+builder.Services.AddHostedService<WeeklyDigestService>();
 
 // Configure forwarded headers for Render deployment
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

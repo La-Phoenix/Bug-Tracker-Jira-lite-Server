@@ -1,4 +1,6 @@
-﻿namespace BugTrackr.Application.Dtos.Auth;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace BugTrackr.Application.Dtos.Auth;
 
 public class AuthResponseDto
 {
@@ -14,4 +16,11 @@ public class AuthResponseDto
     public string FontSize { get; set; } = "medium";
     public bool AnimationsEnabled { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+}
+
+public class TestEmailDto
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
 }

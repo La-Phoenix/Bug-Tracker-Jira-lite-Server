@@ -1,6 +1,8 @@
 ﻿using BugTrackr.Application.Commands.Auth;
 using BugTrackr.Application.Common;
 using BugTrackr.Application.Dtos.Auth;
+using BugTrackr.Application.Queries.Users;
+using BugTrackr.Application.Services.Email;
 using BugTrackr.Application.Services.JWT;
 using BugTrackr.Domain.Entities;
 using BugTrackr.Infrastructure.Persistence;
@@ -20,6 +22,7 @@ public class AuthController : ControllerBase
     private readonly ISender _mediator;
     private readonly ILogger<AuthController> _logger;
     private readonly IJwtService _jwt;
+    private readonly IEmailService _emailService;
     private readonly BugTrackrDbContext _context;
     private readonly IWebHostEnvironment _environment;
 
@@ -27,12 +30,14 @@ public class AuthController : ControllerBase
         ISender mediator,
         ILogger<AuthController> logger,
         IJwtService jwt,
+        IEmailService emailService,
         BugTrackrDbContext context,
         IWebHostEnvironment environment)
     {
         _mediator = mediator;
         _logger = logger;
         _jwt = jwt;
+        _emailService = emailService;
         _context = context;
         _environment = environment;
     }
@@ -200,6 +205,16 @@ public class AuthController : ControllerBase
             if (isNewUser)
             {
                 await AddUserToSampleProject(user.Id);
+                // Send welcome email for OAuth users
+                try
+                {
+                    await _emailService.SendWelcomeEmailAsync(user);
+                    _logger.LogInformation("Welcome email sent to OAuth user: {Email}", user.Email);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send welcome email to OAuth user: {Email}", user.Email);
+                }
             }
 
             var jwt = _jwt.GenerateToken(user);
@@ -266,6 +281,88 @@ public class AuthController : ControllerBase
         {
             _logger.LogError(ex, "Error adding OAuth user {UserId} to Sample Project: {Message}", userId, ex.Message);
             // Don't throw - we don't want OAuth login to fail because of project assignment
+        }
+    }
+
+
+    /// <summary>
+    /// Request password reset
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        _logger.LogInformation("Password reset requested for email: {Email}", dto.Email);
+        var command = new ForgotPasswordCommand(dto.Email);
+        var result = await _mediator.Send(command);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Reset password with token
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        _logger.LogInformation("Password reset attempt with token");
+        var command = new ResetPasswordCommand(dto.Token, dto.NewPassword, dto.ConfirmPassword);
+        var result = await _mediator.Send(command);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    ///// <summary>
+    ///// Resend verification email
+    ///// </summary>
+    //[HttpPost("resend-verification")]
+    //[Authorize]
+    //public async Task<IActionResult> ResendVerificationEmail()
+    //{
+    //    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    //    if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+    //        return BadRequest("Invalid user ID in token");
+
+    //    try
+    //    {
+    //        var user = await _mediator.Send(new GetUserByIdQuery(userId));
+    //        if (user.Data != null)
+    //        {
+    //            // You can implement email verification logic here
+    //            _logger.LogInformation("Verification email resent to user {UserId}", userId);
+    //            return Ok(ApiResponse<string>.SuccessResponse("Verification email sent"));
+    //        }
+    //        return NotFound("User not found");
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        _logger.LogError(ex, "Error resending verification email for user {UserId}", userId);
+    //        return StatusCode(500, ApiResponse<string>.Failure("An error occurred", 500));
+    //    }
+    //}
+
+    /// <summary>
+    /// Send test email (for development/testing)
+    /// </summary>
+    [HttpPost("test-email")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SendTestEmail([FromBody] TestEmailDto dto)
+    {
+        try
+        {
+            await _emailService.SendBulkEmailAsync(
+                new List<string> { dto.Email },
+                "Test Email from BugTrackr",
+                "<h1>Test Email</h1><p>This is a test email from BugTrackr.</p>",
+                "Test Email - This is a test email from BugTrackr."
+            );
+
+            _logger.LogInformation("Test email sent to {Email}", dto.Email);
+            return Ok(ApiResponse<string>.SuccessResponse("Test email sent successfully"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending test email to {Email}", dto.Email);
+            return StatusCode(500, ApiResponse<string>.Failure("Failed to send test email", 500));
         }
     }
 

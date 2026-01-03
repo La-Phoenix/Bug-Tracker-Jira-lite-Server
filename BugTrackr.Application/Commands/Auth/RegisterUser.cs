@@ -2,13 +2,14 @@
 using BugTrackr.Application.Common;
 using BugTrackr.Application.Common.Helpers;
 using BugTrackr.Application.Dtos.Auth;
-using BugTrackr.Application.Exceptions;
 using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.Email;
 using BugTrackr.Application.Services.JWT;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BugTrackr.Application.Commands.Auth;
 
@@ -36,8 +37,10 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
     private readonly IRepository<Project> _projectRepo;
     private readonly IRepository<ProjectUser> _projectUserRepo;
     private readonly IJwtService _jwtService;
+    private readonly IEmailService _emailService;
     private readonly IMapper _mapper;
     private readonly IValidator<RegisterUserCommand> _validator;
+    private readonly ILogger<RegisterUserCommandHandler> _logger;
 
     public RegisterUserCommandHandler(
         IRepository<User> userRepo,
@@ -45,14 +48,18 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
         IRepository<ProjectUser> projectUserRepo,
         IJwtService jwtService,
         IValidator<RegisterUserCommand> validator,
+        IEmailService emailService,
+        ILogger<RegisterUserCommandHandler> logger,
         IMapper mapper)
     {
         _userRepo = userRepo;
         _projectUserRepo = projectUserRepo;
         _projectRepo = projectRepo;
         _jwtService = jwtService;
+        _emailService = emailService;
         _mapper = mapper;
         _validator = validator;
+        _logger = logger;
     }
 
     public async Task<ApiResponse<AuthResponseDto>> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
@@ -98,6 +105,15 @@ public class RegisterUserCommandHandler : IRequestHandler<RegisterUserCommand, A
 
                 await _projectUserRepo.AddAsync(projectUser);
                 await _projectUserRepo.SaveChangesAsync(cancellationToken);
+            }
+
+            // Send Welcome Email
+            try
+            {
+                await _emailService.SendWelcomeEmailAsync(newUser);
+            } catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send welcome email to {Email}", newUser.Email);
             }
 
             // Generate JWT token and map to response DTO

@@ -1,0 +1,624 @@
+﻿using BugTrackr.Domain.Entities;
+
+namespace BugTrackr.Infrastructure.Services.Email;
+
+public static class EmailTemplates
+{
+    public static (string subject, string html, string text) WelcomeEmail(User user)
+    {
+        var subject = "Welcome to BugTrackr!";
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #4f46e5; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .button {{ display: inline-block; background: #4f46e5; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>Welcome to BugTrackr</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p>Welcome to BugTrackr - your comprehensive bug tracking and project management solution.</p>
+                    <p>You've been automatically added to the Sample Project to get you started. You can now:</p>
+                    <ul>
+                        <li>Create and track issues</li>
+                        <li>Collaborate with team members</li>
+                        <li>Manage project workflows</li>
+                        <li>Stay organized with real-time updates</li>
+                    </ul>
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app"" class=""button"">Get Started</a>
+                    <p>If you have any questions, feel free to reach out to our support team.</p>
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"Welcome to BugTrackr!
+
+            Hello {user.Name}!
+
+            Welcome to BugTrackr - your comprehensive bug tracking and project management solution.
+
+            You've been automatically added to the Sample Project to get you started. You can now:
+            - Create and track issues
+            - Collaborate with team members  
+            - Manage project workflows
+            - Stay organized with real-time updates
+
+            Get started at: https://bug-tracker-jira-lite-client.vercel.app
+
+            If you have any questions, feel free to reach out to our support team.
+
+            Best regards,
+            The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+    //public static (string subject, string html, string text) PasswordResetEmail(User user, string resetToken)
+    //{
+    //    var resetLink = $"https://bug-tracker-jira-lite-client.vercel.app/reset-password?token={resetToken}";
+    //    var subject = "Password Reset Request";
+    //    var html = $@"
+    //    <!DOCTYPE html>
+    //    <html>
+    //    <head>
+    //        <style>
+    //            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+    //            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+    //            .header {{ background: #ef4444; color: white; padding: 20px; text-align: center; }}
+    //            .content {{ padding: 30px; background: #f8fafc; }}
+    //            .button {{ display: inline-block; background: #ef4444; color: white; padding: 12px 24px; 
+    //                       text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+    //        </style>
+    //    </head>
+    //    <body>
+    //        <div class=""container"">
+    //            <div class=""header"">
+    //                <h1>Password Reset</h1>
+    //            </div>
+    //            <div class=""content"">
+    //                <h2>Hello {user.Name}!</h2>
+    //                <p>You requested a password reset for your BugTrackr account.</p>
+    //                <a href=""{resetLink}"" class=""button"">Reset Password</a>
+    //                <p>This link will expire in 1 hour. If you didn't request this reset, please ignore this email.</p>
+    //                <p>Best regards,<br>The BugTrackr Team</p>
+    //            </div>
+    //        </div>
+    //    </body>
+    //    </html>";
+
+    //    var text = $@"Password Reset
+
+    //    Hello {user.Name}!
+
+    //    You requested a password reset for your BugTrackr account.
+
+    //    Reset your password at: {resetLink}
+
+    //    This link will expire in 1 hour. If you didn't request this reset, please ignore this email.
+
+    //    Best regards,
+    //    The BugTrackr Team";
+    //    return (subject, html, text);
+    //}
+
+    public static (string subject, string html, string text) IssueAssignedEmail(User assignee, Issue issue, User assignedBy)
+    {
+        var subject = $"Issue Assigned: {issue.Title}";
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #10b981; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .issue-details {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+                .button {{ display: inline-block; background: #10b981; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .priority-{issue.Priority.Name.ToLower()} {{ color: {GetPriorityColor(issue.Priority.Name)}; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>New Issue Assigned</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {assignee.Name}!</h2>
+                    <p>You have been assigned a new issue by {assignedBy.Name}.</p>
+            
+                    <div class=""issue-details"">
+                        <h3>{issue.Title}</h3>
+                        <p><strong>Description:</strong> {issue.Description}</p>
+                        <p><strong>Priority:</strong> <span class=""priority-{issue.Priority.Name.ToLower()}"">{issue.Priority}</span></p>
+                        <p><strong>Status:</strong> {issue.Status}</p>
+                        <p><strong>Due Date:</strong> {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}</p>
+                    </div>
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
+            
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"New Issue Assigned
+
+        Hello {assignee.Name}!
+
+        You have been assigned a new issue by {assignedBy.Name}.
+
+        Issue Details:
+        - Title: {issue.Title}
+        - Description: {issue.Description}
+        - Priority: {issue.Priority}
+        - Status: {issue.Status}
+        - Due Date: {(issue.DueDate?.ToString("MMM dd, yyyy") ?? "Not set")}
+
+        View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
+
+        Best regards,
+        The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+    public static (string subject, string html, string text) CommentNotificationEmail(User user, Issue issue, Comment comment)
+    {
+        var subject = $"New Comment on Issue: {issue.Title}";
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #8b5cf6; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .comment-box {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #8b5cf6; }}
+                .button {{ display: inline-block; background: #8b5cf6; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>New Comment</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p>A new comment has been added to issue <strong>{issue.Title}</strong>.</p>
+            
+                    <div class=""comment-box"">
+                        <p><strong>Comment by:</strong> {comment.Author.Name}</p>
+                        <p><strong>Date:</strong> {comment.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}</p>
+                        <p><strong>Comment:</strong></p>
+                        <p>{comment.Content}</p>
+                    </div>
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
+            
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"New Comment
+
+        Hello {user.Name}!
+
+        A new comment has been added to issue ""{issue.Title}"".
+
+        Comment by: {comment.Author.Name}
+        Date: {comment.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}
+        Comment: {comment.Content}
+
+        View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
+
+        Best regards,
+        The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+    public static (string subject, string html, string text) PasswordResetEmail(User user, string resetToken)
+    {
+        var resetLink = $"https://bug-tracker-jira-lite-client.vercel.app/reset-password?token={resetToken}";
+        var subject = "Password Reset Request";
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #ef4444; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .button {{ display: inline-block; background: #ef4444; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .warning {{ background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>Password Reset Request</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p>You requested a password reset for your BugTrackr account.</p>
+            
+                    <div class=""warning"">
+                        <p><strong>Security Notice:</strong> If you didn't request this password reset, please ignore this email and your password will remain unchanged.</p>
+                    </div>
+            
+                    <p>To reset your password, click the button below:</p>
+                    <a href=""{resetLink}"" class=""button"">Reset Password</a>
+            
+                    <p>Or copy and paste this link into your browser:</p>
+                    <p><a href=""{resetLink}"">{resetLink}</a></p>
+            
+                    <p><strong>This link will expire in 1 hour for security reasons.</strong></p>
+            
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"Password Reset Request
+
+        Hello {user.Name}!
+
+        You requested a password reset for your BugTrackr account.
+
+        SECURITY NOTICE: If you didn't request this password reset, please ignore this email and your password will remain unchanged.
+
+        To reset your password, visit: {resetLink}
+
+        This link will expire in 1 hour for security reasons.
+
+        Best regards,
+        The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+    public static (string subject, string html) ProjectInvitationEmail(Project project, User user, User invitedBy)
+    {
+        var subject = $"You've been invited to join '{project.Name}'";
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #06b6d4; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .project-info {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #06b6d4; }}
+                .button {{ display: inline-block; background: #06b6d4; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>Project Invitation</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p><strong>{invitedBy.Name}</strong> has invited you to collaborate on a project in BugTrackr.</p>
+            
+                    <div class=""project-info"">
+                        <h3>📋 {project.Name}</h3>
+                        <p><strong>Description:</strong> {project.Description ?? "No description provided"}</p>
+                        <p><strong>Project Owner:</strong> {invitedBy.Name}</p>
+                        <p><strong>Invited on:</strong> {DateTime.UtcNow:MMM dd, yyyy}</p>
+                    </div>
+            
+                    <p>As a project member, you'll be able to:</p>
+                    <ul>
+                        <li>🐛 View and manage issues</li>
+                        <li>💬 Comment and collaborate with team members</li>
+                        <li>📈 Track project progress</li>
+                        <li>🔔 Receive notifications about project updates</li>
+                    </ul>
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/projects/{project.Id}"" class=""button"">View Project</a>
+            
+                    <p>Welcome to the team!</p>
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        return (subject, html);
+    }
+
+    public static (string subject, string html, string text) MentionNotificationEmail(User user, Issue issue, Comment comment, User mentionedBy)
+    {
+        var subject = $"You were mentioned in '{issue.Title}'";
+        var html = $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .header {{ background: #f59e0b; color: white; padding: 20px; text-align: center; }}
+                    .content {{ padding: 30px; background: #f8fafc; }}
+                    .mention-box {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #f59e0b; }}
+                    .comment-box {{ background: #fffbeb; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                    .button {{ display: inline-block; background: #f59e0b; color: white; padding: 12px 24px; 
+                               text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                </style>
+            </head>
+            <body>
+                <div class=""container"">
+                    <div class=""header"">
+                        <h1>👋 You were mentioned!</h1>
+                    </div>
+                    <div class=""content"">
+                        <h2>Hello {user.Name}!</h2>
+                        <p><strong>{mentionedBy.Name}</strong> mentioned you in a comment on issue <strong>'{issue.Title}'</strong>.</p>
+            
+                        <div class=""mention-box"">
+                            <h3>📋 Issue: {issue.Title}</h3>
+                            <p><strong>Description:</strong> {issue.Description}</p>
+                            <p><strong>Status:</strong> {issue.Status?.Name ?? "Unknown"}</p>
+                            <p><strong>Priority:</strong> {issue.Priority?.Name ?? "Unknown"}</p>
+                        </div>
+            
+                        <div class=""comment-box"">
+                            <p><strong>💬 {mentionedBy.Name} commented:</strong></p>
+                            <p>{comment.Content}</p>
+                            <p><small>📅 {comment.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}</small></p>
+                        </div>
+            
+                        <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue & Respond</a>
+            
+                        <p>Stay connected with your team!</p>
+                        <p>Best regards,<br>The BugTrackr Team</p>
+                    </div>
+                </div>
+            </body>
+            </html>";
+
+                    var text = $@"You were mentioned!
+
+            Hello {user.Name}!
+
+            {mentionedBy.Name} mentioned you in a comment on issue '{issue.Title}'.
+
+            Issue Details:
+            - Title: {issue.Title}
+            - Description: {issue.Description}
+            - Status: {issue.Status?.Name ?? "Unknown"}
+            - Priority: {issue.Priority?.Name ?? "Unknown"}
+
+            Comment by {mentionedBy.Name}:
+            {comment.Content}
+
+            View issue and respond at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
+
+            Best regards,
+            The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+    public static (string subject, string html, string text) IssueCreatedEmail(User user, Issue issue, User reporter)
+    {
+        var priorityColor = GetPriorityColor(issue.Priority?.Name ?? "Medium");
+        var subject = $"New Issue Created: {issue.Title}";
+
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #3b82f6; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .issue-details {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3b82f6; }}
+                .button {{ display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .priority {{ color: {priorityColor}; font-weight: bold; }}
+                .meta-info {{ background: #f1f5f9; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                .status-badge {{ display: inline-block; background: #10b981; color: white; padding: 4px 8px; 
+                                border-radius: 12px; font-size: 0.8em; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>🆕 New Issue Created</h1>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p>A new issue has been created in project <strong>{issue.Project?.Name}</strong> by {reporter.Name}.</p>
+            
+                    <div class=""issue-details"">
+                        <h3>📋 {issue.Title}</h3>
+                        <p><strong>Description:</strong></p>
+                        <p>{issue.Description ?? "No description provided"}</p>
+                
+                        <div class=""meta-info"">
+                            <p><strong>Priority:</strong> <span class=""priority"">{issue.Priority?.Name ?? "Medium"}</span></p>
+                            <p><strong>Status:</strong> <span class=""status-badge"">{issue.Status?.Name ?? "Open"}</span></p>
+                            <p><strong>Type:</strong> {"Task"}</p>
+                            <p><strong>Reported by:</strong> {reporter.Name}</p>
+                            {(issue.AssigneeId.HasValue ? $"<p><strong>Assigned to:</strong> {issue.Assignee?.Name}</p>" : "")}
+                            <p><strong>Created:</strong> {issue.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}</p>
+                        </div>
+                    </div>
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}"" class=""button"">View Issue</a>
+            
+                    <p>Stay updated with your project progress!</p>
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"New Issue Created
+
+        Hello {user.Name}!
+
+        A new issue has been created in project ""{issue.Project?.Name}"" by {reporter.Name}.
+
+        Issue Details:
+        - Title: {issue.Title}
+        - Description: {issue.Description ?? "No description provided"}
+        - Priority: {issue.Priority?.Name ?? "Medium"}
+        - Status: {issue.Status?.Name ?? "Open"}
+        - Type: {"Task"}
+        - Reported by: {reporter.Name}
+        {(issue.AssigneeId.HasValue ? $"- Assigned to: {issue.Assignee?.Name}" : "")}
+        - Created: {issue.CreatedAt:MMM dd, yyyy 'at' hh:mm tt}
+
+        View issue at: https://bug-tracker-jira-lite-client.vercel.app/issues/{issue.Id}
+
+        Best regards,
+        The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+
+
+    public static (string subject, string html, string text) WeeklyDigestEmail(User user, List<Issue> assignedIssues, List<Project> projects)
+    {
+        var subject = "Your Weekly BugTrackr Digest";
+        var overdueTasks = assignedIssues.Where(i => i.DueDate.HasValue && i.DueDate.Value < DateTime.UtcNow).ToList();
+        var upcomingTasks = assignedIssues.Where(i => i.DueDate.HasValue && i.DueDate.Value > DateTime.UtcNow && i.DueDate.Value <= DateTime.UtcNow.AddDays(7)).ToList();
+
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #6366f1; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; background: #f8fafc; }}
+                .section {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+                .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
+                .stat-item {{ text-align: center; }}
+                .stat-number {{ font-size: 2em; font-weight: bold; color: #6366f1; }}
+                .urgent {{ color: #ef4444; font-weight: bold; }}
+                .button {{ display: inline-block; background: #6366f1; color: white; padding: 12px 24px; 
+                           text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class=""container"">
+                <div class=""header"">
+                    <h1>📊 Your Weekly Digest</h1>
+                    <p>Week of {DateTime.UtcNow.AddDays(-7):MMM dd} - {DateTime.UtcNow:MMM dd, yyyy}</p>
+                </div>
+                <div class=""content"">
+                    <h2>Hello {user.Name}!</h2>
+                    <p>Here's your weekly summary of activity and tasks in BugTrackr.</p>
+            
+                    <div class=""section"">
+                        <h3>📈 Your Stats</h3>
+                        <div class=""stats"">
+                            <div class=""stat-item"">
+                                <div class=""stat-number"">{assignedIssues.Count}</div>
+                                <div>Assigned Issues</div>
+                            </div>
+                            <div class=""stat-item"">
+                                <div class=""stat-number"">{projects.Count}</div>
+                                <div>Active Projects</div>
+                            </div>
+                            <div class=""stat-item"">
+                                <div class=""stat-number"">{overdueTasks.Count}</div>
+                                <div>Overdue Tasks</div>
+                            </div>
+                        </div>
+                    </div>
+            
+                    {(overdueTasks.Any() ? $@"
+                    <div class=""section"">
+                        <h3>🚨 Overdue Tasks ({overdueTasks.Count})</h3>
+                        {string.Join("", overdueTasks.Take(5).Select(task => $@"
+                        <p class=""urgent"">• {task.Title} (Due: {task.DueDate?.ToString("MMM dd")})</p>"))}
+                        {(overdueTasks.Count > 5 ? $"<p>...and {overdueTasks.Count - 5} more</p>" : "")}
+                    </div>" : "")}
+            
+                    {(upcomingTasks.Any() ? $@"
+                    <div class=""section"">
+                        <h3>📅 Due This Week ({upcomingTasks.Count})</h3>
+                        {string.Join("", upcomingTasks.Take(5).Select(task => $@"
+                        <p>• {task.Title} (Due: {task.DueDate?.ToString("MMM dd")})</p>"))}
+                        {(upcomingTasks.Count > 5 ? $"<p>...and {upcomingTasks.Count - 5} more</p>" : "")}
+                    </div>" : "")}
+            
+                    <a href=""https://bug-tracker-jira-lite-client.vercel.app/dashboard"" class=""button"">View Dashboard</a>
+            
+                    <p>Keep up the great work!</p>
+                    <p>Best regards,<br>The BugTrackr Team</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"Your Weekly BugTrackr Digest
+        Week of {DateTime.UtcNow.AddDays(-7):MMM dd} - {DateTime.UtcNow:MMM dd, yyyy}
+
+        Hello {user.Name}!
+
+        Here's your weekly summary:
+
+        📊 Your Stats:
+        - {assignedIssues.Count} Assigned Issues
+        - {projects.Count} Active Projects
+        - {overdueTasks.Count} Overdue Tasks
+
+        {(overdueTasks.Any() ? $@"
+        🚨 Overdue Tasks:
+        {string.Join("\n", overdueTasks.Take(5).Select(t => $"• {t.Title} (Due: {t.DueDate?.ToString("MMM dd")})"))}
+        {(overdueTasks.Count > 5 ? $"...and {overdueTasks.Count - 5} more" : "")}" : "")}
+
+        {(upcomingTasks.Any() ? $@"
+        📅 Due This Week:
+        {string.Join("\n", upcomingTasks.Take(5).Select(t => $"• {t.Title} (Due: {t.DueDate?.ToString("MMM dd")})"))}
+        {(upcomingTasks.Count > 5 ? $"...and {upcomingTasks.Count - 5} more" : "")}" : "")}
+
+        View your dashboard: https://bug-tracker-jira-lite-client.vercel.app/dashboard
+
+        Keep up the great work!
+        The BugTrackr Team";
+
+        return (subject, html, text);
+    }
+    private static string GetPriorityColor(string priority)
+    {
+        return priority.ToLower() switch
+        {
+            "high" => "#ef4444",
+            "medium" => "#f59e0b",
+            "low" => "#10b981",
+            _ => "#6b7280"
+        };
+    }
+}

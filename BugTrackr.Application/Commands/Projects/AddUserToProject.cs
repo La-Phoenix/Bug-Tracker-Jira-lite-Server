@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using BugTrackr.Application.Common;
 using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.Email;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
@@ -27,17 +28,20 @@ public class AddUserToProjectCommandHandler : IRequestHandler<AddUserToProjectCo
     private readonly IRepository<ProjectUser> _projectUserRepo;
     private readonly IRepository<Project> _projectRepo;
     private readonly IRepository<User> _userRepo;
+    private readonly IEmailService _emailService;
     private readonly ILogger<AddUserToProjectCommandHandler> _logger;
 
     public AddUserToProjectCommandHandler(
         IRepository<ProjectUser> projectUserRepo,
         IRepository<Project> projectRepo,
         IRepository<User> userRepo,
+        IEmailService emailService,
         ILogger<AddUserToProjectCommandHandler> logger)
     {
         _projectUserRepo = projectUserRepo;
         _projectRepo = projectRepo;
         _userRepo = userRepo;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -78,6 +82,9 @@ public class AddUserToProjectCommandHandler : IRequestHandler<AddUserToProjectCo
 
             await _projectUserRepo.AddAsync(projectUser);
             await _projectUserRepo.SaveChangesAsync(cancellationToken);
+
+            // Send project invitation email
+            await _emailService.SendProjectInvitationEmailAsync(user, project, project.CreatedBy);
 
             _logger.LogInformation("Added user {UserId} to project {ProjectId} with role {Role}",
                 request.UserId, request.ProjectId, request.RoleInProject);

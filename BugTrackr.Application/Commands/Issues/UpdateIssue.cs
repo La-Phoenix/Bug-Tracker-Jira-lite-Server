@@ -3,6 +3,7 @@ using BugTrackr.Application.Common;
 using BugTrackr.Application.Common.Helpers;
 using BugTrackr.Application.DTOs.Issues;
 using BugTrackr.Application.Services;
+using BugTrackr.Application.Services.Email;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
@@ -52,15 +53,19 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
 {
     private readonly IRepository<Issue> _issueRepo;
     private readonly IRepository<Label> _labelRepo;
+    private readonly IRepository<User> _userRepo;
     private readonly IRepository<IssueLabel> _issueLabelRepo;
+    private readonly IEmailService _emailService;
     private readonly IMapper _mapper;
     private readonly IValidator<UpdateIssueCommand> _validator;
     private readonly ILogger<UpdateIssueCommandHandler> _logger;
 
     public UpdateIssueCommandHandler(
         IRepository<Issue> issueRepo,
+        IRepository<User> userRepo,
         IRepository<Label> labelRepo,
         IRepository<IssueLabel> issueLabelRepo,
+        IEmailService emailService,
         IMapper mapper,
         IValidator<UpdateIssueCommand> validator,
         ILogger<UpdateIssueCommandHandler> logger)
@@ -68,6 +73,8 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
         _issueRepo = issueRepo;
         _labelRepo = labelRepo;
         _issueLabelRepo = issueLabelRepo;
+        _userRepo = userRepo;
+        _emailService = emailService;
         _mapper = mapper;
         _validator = validator;
         _logger = logger;
@@ -91,6 +98,9 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
             {
                 return ApiResponse<IssueDto>.Failure($"Issue with ID {request.Id} not found", 404);
             }
+
+            var oldAssigneeId = issue.AssigneeId;
+            var oldStatus = issue.Status?.Name;
 
             // Update basic properties
             issue.Title = request.Title;
@@ -119,6 +129,10 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
                 .Include(i => i.IssueLabels)
                     .ThenInclude(il => il.Label)
                 .FirstAsync(i => i.Id == issue.Id, cancellationToken);
+
+            // Send email notifications
+            await SendUpdateNotificationsAsync(updatedIssue, oldAssigneeId, oldStatus);
+
 
             var issueDto = _mapper.Map<IssueDto>(updatedIssue);
 
@@ -194,6 +208,60 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
         {
             _logger.LogError(ex, "Error updating labels for issue {IssueId}: {Message}", issueId, ex.Message);
             throw;
+        }
+    }
+
+    private async Task SendUpdateNotificationsAsync(Issue issue, int? oldAssigneeId, string oldStatus)
+    {
+        try
+        {
+            // 1. Notify new assignee if assignment changed
+            if (issue.AssigneeId.HasValue && issue.AssigneeId != oldAssigneeId && issue.Assignee != null)
+            {
+                await _emailService.SendIssueAssignedEmailAsync(issue.Assignee, issue, issue.Reporter);
+            }
+
+            // 2. Notify old assignee if unassigned
+            if (oldAssigneeId.HasValue && !issue.AssigneeId.HasValue)
+            {
+                var oldAssignee = await _userRepo.GetByIdAsync(oldAssigneeId.Value);
+                if (oldAssignee != null)
+                {
+                    await _emailService.SendIssueUpdatedEmailAsync(oldAssignee, issue, "unassigned from you");
+                }
+            }
+
+            // 3. Notify reporter if they're not the updater and not the assignee
+            if (issue.Reporter != null &&
+                issue.Reporter.Id != issue.AssigneeId &&
+                issue.Reporter.IssueUpdates)
+            {
+                await _emailService.SendIssueUpdatedEmailAsync(issue.Reporter, issue, "updated");
+            }
+
+            // 4. Notify project team if status changed significantly
+            if (oldStatus != issue.Status?.Name &&
+                (issue.Status?.Name == "Done" || issue.Status?.Name == "Closed"))
+            {
+                var projectUsers = issue.Project?.ProjectUsers?
+                    .Where(pu => pu.User.ProjectUpdates)
+                    .Select(pu => pu.User)
+                    .ToList() ?? new List<User>();
+
+                if (projectUsers.Any())
+                {
+                    await _emailService.SendProjectUpdateEmailAsync(
+                        projectUsers,
+                        issue.Project,
+                        $"issue '{issue.Title}' marked as {issue.Status?.Name}"
+                    );
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending update notifications for issue {IssueId}", issue.Id);
+            // Don't throw - notification failure shouldn't break the update
         }
     }
 }

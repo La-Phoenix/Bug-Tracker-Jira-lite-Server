@@ -23,6 +23,7 @@ public class Issue
 
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public DateTime? DueDate { get; set; }
 
     public ICollection<IssueLabel> IssueLabels { get; set; } = new List<IssueLabel>();
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
