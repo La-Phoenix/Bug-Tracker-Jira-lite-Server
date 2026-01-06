@@ -4,6 +4,7 @@ using BugTrackr.Application.Common.Helpers;
 using BugTrackr.Application.DTOs.Issues;
 using BugTrackr.Application.Services;
 using BugTrackr.Application.Services.Email;
+using BugTrackr.Application.Services.NotificationService;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
@@ -60,6 +61,7 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
     private readonly IRepository<IssueLabel> _issueLabelRepo;
     private readonly IRepository<User> _userRepo;
     private readonly IEmailService _emailService;
+    private readonly INotificationService _notificationService;
     private readonly IMapper _mapper;
     private readonly ILogger<CreateIssueCommandHandler> _logger;
     private readonly IValidator<CreateIssueCommand> _validator;
@@ -70,6 +72,7 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
         IRepository<IssueLabel> issueLabelRepo,
         IRepository<User> userRepo,
         IEmailService emailService,
+        INotificationService notificationService,
         IMapper mapper,
         IValidator<CreateIssueCommand> validator,
         ILogger<CreateIssueCommandHandler> logger)
@@ -79,6 +82,7 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
         _issueLabelRepo = issueLabelRepo;
         _userRepo = userRepo;
         _emailService = emailService;
+        _notificationService = notificationService;
         _mapper = mapper;
         _validator = validator;
         _logger = logger;
@@ -156,7 +160,7 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
 
             // Send email notifications
             if (createdIssue.Assignee != null) await _emailService.SendIssueCreatedEmailAsync(createdIssue.Assignee, createdIssue, createdIssue.Reporter);
-            await SendCreationNotificationsAsync(createdIssue);
+            await SendCreationNotificationsAsync(createdIssue, cancellationToken);
 
             var issueDto = _mapper.Map<IssueDto>(createdIssue);
 
@@ -168,22 +172,44 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
             return ApiResponse<IssueDto>.Failure("An unexpected error occurred.", 500);
         }
     }
-    private async Task SendCreationNotificationsAsync(Issue issue)
+    private async Task SendCreationNotificationsAsync(Issue issue, CancellationToken cancellationToken)
     {
         try
         {
             var notifiedUserIds = new HashSet<int> { issue.ReporterId }; // Don't notify the reporter
 
+            // Get project members who want issue notifications
+            var activeMembers = issue.Project?.ProjectUsers?
+                .Where(pu => !notifiedUserIds.Contains(pu.UserId) && pu.User.IssueUpdates)
+                .Select(pu => pu.User)
+                .ToList() ?? new List<User>();
+
+            // Send notification service notifications (real-time + persistent) to all project members
+            if (activeMembers.Any())
+            {
+                await _notificationService.SendIssueCreatedNotification(
+                    activeMembers,
+                    issue,
+                    issue.Reporter,
+                    cancellationToken);
+            }
+
             // 1. Notify assignee if someone is assigned and it's not the reporter
             if (issue.AssigneeId.HasValue && issue.Assignee != null && issue.AssigneeId != issue.ReporterId)
             {
-                await _emailService.SendIssueAssignedEmailAsync(issue.Assignee, issue, issue.Reporter);
+                // Send assignment notification (real-time + email)
+                await _notificationService.SendIssueAssignedNotification(
+                    issue.Assignee,
+                    issue,
+                    issue.Reporter,
+                    cancellationToken);
+
                 notifiedUserIds.Add(issue.AssigneeId.Value);
                 _logger.LogInformation("Issue assignment notification sent to {Email} for issue {IssueId}",
                     issue.Assignee.Email, issue.Id);
             }
 
-            // 2. Notify project managers/owners using the dedicated issue creation email
+            // 2. Send emails to project managers/owners for all new issues
             var projectManagers = issue.Project?.ProjectUsers?
                 .Where(pu => pu.RoleInProject == "Admin" || pu.RoleInProject == "Owner")
                 .Where(pu => !notifiedUserIds.Contains(pu.UserId) && pu.User.ProjectUpdates)
@@ -194,29 +220,25 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
             {
                 await _emailService.SendIssueCreatedEmailAsync(manager, issue, issue.Reporter);
                 notifiedUserIds.Add(manager.Id);
-                _logger.LogInformation("Issue creation notification sent to project manager {Email} for issue {IssueId}",
+                _logger.LogInformation("Issue creation email sent to project manager {Email} for issue {IssueId}",
                     manager.Email, issue.Id);
             }
 
-            // 3. If it's a high priority issue, notify all active project members with issue creation email
+            // 3. If it's a high priority issue, send additional emails to all active project members
             if (issue.Priority?.Name == "High" || issue.Priority?.Name == "Critical")
             {
-                var activeMembers = issue.Project?.ProjectUsers?
-                    .Where(pu => !notifiedUserIds.Contains(pu.UserId) && pu.User.IssueUpdates)
-                    .Select(pu => pu.User)
-                    .ToList() ?? new List<User>();
-
-                foreach (var member in activeMembers)
+                var membersForEmail = activeMembers.Where(m => !notifiedUserIds.Contains(m.Id)).ToList();
+                foreach (var member in membersForEmail)
                 {
                     await _emailService.SendIssueCreatedEmailAsync(member, issue, issue.Reporter);
                     notifiedUserIds.Add(member.Id);
                 }
 
-                _logger.LogInformation("High priority issue creation notifications sent to {Count} project members for issue {IssueId}",
-                    activeMembers.Count, issue.Id);
+                _logger.LogInformation("High priority issue creation emails sent to {Count} project members for issue {IssueId}",
+                    membersForEmail.Count, issue.Id);
             }
 
-            // 4. If issue mentions users in description, notify them
+            // 4. Handle mentions in description
             if (!string.IsNullOrEmpty(issue.Description))
             {
                 var mentionedUsernames = ExtractMentions(issue.Description);
@@ -226,40 +248,35 @@ public class CreateIssueCommandHandler : IRequestHandler<CreateIssueCommand, Api
                         .Where(u => mentionedUsernames.Contains(u.Name) &&
                                    !notifiedUserIds.Contains(u.Id) &&
                                    u.MentionAlerts)
-                        .ToListAsync();
+                        .ToListAsync(cancellationToken);
 
                     foreach (var mentionedUser in mentionedUsers)
                     {
-                        await _emailService.SendMentionNotificationEmailAsync(
+                        // Create a fake comment for the mention notification
+                        var fakeComment = new Comment
+                        {
+                            Content = issue.Description,
+                            Author = issue.Reporter,
+                            CreatedAt = issue.CreatedAt,
+                            AuthorId = issue.ReporterId,
+                            IssueId = issue.Id
+                        };
+
+                        // Send mention notification (real-time + email)
+                        await _notificationService.SendMentionNotification(
                             mentionedUser,
                             issue,
-                            new Comment { Content = issue.Description, Author = issue.Reporter, CreatedAt = issue.CreatedAt },
-                            issue.Reporter
-                        );
+                            fakeComment,
+                            issue.Reporter,
+                            cancellationToken);
+
                         _logger.LogInformation("Mention notification sent to {Email} for new issue {IssueId}",
                             mentionedUser.Email, issue.Id);
                     }
                 }
             }
 
-            // 5. Notify other stakeholders who should know about new issues in the project
-            //var otherStakeholders = issue.Project?.ProjectUsers?
-            //    .Where(pu => pu.RoleInProject == "Lead" || pu.RoleInProject == "Manager")
-            //    .Where(pu => !notifiedUserIds.Contains(pu.UserId) && pu.User.IssueUpdates)
-            //    .Select(pu => pu.User)
-            //    .ToList() ?? new List<User>();
-
-            //foreach (var stakeholder in otherStakeholders)
-            //{
-            //    await _emailService.SendIssueCreatedEmailAsync(stakeholder, issue, issue.Reporter);
-            //    notifiedUserIds.Add(stakeholder.Id);
-            //}
-
-            //if (otherStakeholders.Any())
-            //{
-            //    _logger.LogInformation("Issue creation notifications sent to {Count} stakeholders for issue {IssueId}",
-            //        otherStakeholders.Count, issue.Id);
-            //}
+            _logger.LogInformation("All creation notifications processed for issue {IssueId}", issue.Id);
         }
         catch (Exception ex)
         {

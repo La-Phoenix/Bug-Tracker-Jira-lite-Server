@@ -173,5 +173,34 @@ public class BugTrackrDbContext : DbContext
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // Notification Configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type)
+            .HasConversion<string>()
+            .IsRequired();
+            entity.Property(e => e.Title)
+            .IsRequired()
+            .HasMaxLength(200);
+            entity.Property(e => e.Message)
+           .IsRequired()
+           .HasMaxLength(1000);
+
+            entity.Property(e => e.Priority)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Create Index for efficient queries
+            entity.HasIndex(e => new { e.UserId, e.IsRead, e.CreatedAt });
+            entity.HasIndex(e => e.ExpiresAt);
+            entity.HasIndex(e => e.GroupKey);
+        });
     }
 }

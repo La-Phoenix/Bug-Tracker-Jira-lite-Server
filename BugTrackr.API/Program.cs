@@ -25,6 +25,7 @@ using BugTrackr.Infrastructure.Services;
 using BugTrackr.Application.Services.Chat;
 using BugTrackr.Application.Services.Email;
 using BugTrackr.Infrastructure.Services.Email;
+using BugTrackr.Application.Services.NotificationService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,7 +65,10 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = !builder.Environment.IsProduction();
 });
 
-// Register the notification service
+// Register the notification services
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// Register the chat notification service
 builder.Services.AddScoped<IChatNotificationService, ChatNotificationService>();
 
 // Configure MailJet Settings
@@ -75,6 +79,7 @@ builder.Services.AddScoped<IEmailService, MailjetEmailService>();
 
 // Register background services
 builder.Services.AddHostedService<WeeklyDigestService>();
+builder.Services.AddHostedService<NotificationCleanupService>();
 
 // Configure forwarded headers for Render deployment
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -158,7 +163,7 @@ authBuilder.AddJwtBearer(options =>
         {
             // If the request is for our hub...
             var path = context.HttpContext.Request.Path;
-            if (path.StartsWithSegments("/chatHub"))
+            if (path.StartsWithSegments("/chatHub") || path.StartsWithSegments("/notificationHub"))
             {
                 // Read the token out of the query string
                 var accessToken = context.Request.Query["access_token"];
@@ -443,6 +448,7 @@ app.UseAuthorization();
 app.MapHealthChecks("/health");
 
 app.MapHub<ChatHub>("/chatHub");
+app.MapHub<NotificationHub>("/notificationHub");
 app.MapControllers();
 
 app.Run();

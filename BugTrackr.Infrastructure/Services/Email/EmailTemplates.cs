@@ -1,4 +1,5 @@
 ﻿using BugTrackr.Domain.Entities;
+using BugTrackr.Domain.Enums;
 using System.Linq;
 
 namespace BugTrackr.Infrastructure.Services.Email;
@@ -680,6 +681,180 @@ public static class EmailTemplates
 
         return (subject, html, text);
     }
+
+    public static (string subject, string html, string text) ChatMessageEmail(User recipient, ChatMessage message, ChatRoom room)
+    {
+        var subject = room.Type == ChatRoomType.Direct
+            ? $"New message from {message.Sender.Name}"
+            : $"New message in {room.Name}";
+
+        var messagePreview = message.Content.Length > 100
+            ? message.Content[..100] + "..."
+            : message.Content;
+
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>{subject}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }}
+                .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; }}
+                .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; }}
+                .message-container {{ background-color: #f8fafc; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; }}
+                .sender {{ font-weight: bold; color: #1e40af; margin-bottom: 5px; }}
+                .message-content {{ color: #374151; line-height: 1.6; }}
+                .room-info {{ background-color: #eff6ff; padding: 10px; border-radius: 5px; margin: 15px 0; }}
+                .footer {{ background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+                .button {{ display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 15px 0; }}
+                .timestamp {{ color: #6b7280; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>💬 {subject}</h1>
+                </div>
+                <div class='content'>
+                    <h2>Hello {recipient.Name},</h2>
+                    
+                    {(room.Type == ChatRoomType.Direct ?
+                        $"<p>You have a new direct message from <strong>{message.Sender.Name}</strong>:</p>" :
+                        $"<p>There's a new message in <strong>{room.Name}</strong>:</p>")}
+                    
+                    <div class='message-container'>
+                        <div class='sender'>{message.Sender.Name}</div>
+                        <div class='message-content'>{messagePreview}</div>
+                        <div class='timestamp'>{message.CreatedAt:MMM dd, yyyy 'at' h:mm tt}</div>
+                    </div>
+                    
+                    {(room.Type != ChatRoomType.Direct ? $@"
+                    <div class='room-info'>
+                        <strong>Chat Room:</strong> {room.Name}<br>
+                        {(!string.IsNullOrEmpty(room.Description) ? $"<strong>Description:</strong> {room.Description}" : "")}
+                    </div>" : "")}
+                    
+                    <p>
+                        <a href='#' class='button'>View in BugTrackr</a>
+                    </p>
+                    
+                    <p>Stay connected with your team and never miss important conversations.</p>
+                </div>
+                <div class='footer'>
+                    <p>This email was sent by BugTrackr. You can manage your notification preferences in your account settings.</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"
+        {subject}
+        
+        Hello {recipient.Name},
+        
+        {(room.Type == ChatRoomType.Direct ?
+            $"You have a new direct message from {message.Sender.Name}:" :
+            $"There's a new message in {room.Name}:")}
+        
+        From: {message.Sender.Name}
+        Message: {messagePreview}
+        Time: {message.CreatedAt:MMM dd, yyyy 'at' h:mm tt}
+        
+        {(room.Type != ChatRoomType.Direct ? $"Chat Room: {room.Name}" : "")}
+        
+        Log in to BugTrackr to view the full conversation and reply.
+        
+        ---
+        This email was sent by BugTrackr. You can manage your notification preferences in your account settings.
+        ";
+
+        return (subject, html, text);
+    }
+
+    public static (string subject, string html, string text) ChatInvitationEmail(User user, ChatRoom room, User invitedBy)
+    {
+        var subject = room.Type == ChatRoomType.Direct
+            ? $"{invitedBy.Name} started a chat with you"
+            : $"You've been added to {room.Name}";
+
+        var html = $@"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='utf-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>{subject}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f4f4f4; }}
+                .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; }}
+                .header {{ background-color: #059669; color: white; padding: 20px; text-align: center; }}
+                .content {{ padding: 30px; }}
+                .invitation-box {{ background-color: #ecfdf5; border: 2px solid #059669; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; }}
+                .room-details {{ background-color: #f8fafc; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                .footer {{ background-color: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
+                .button {{ display: inline-block; background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 15px 0; }}
+                .invited-by {{ color: #1f2937; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class='container'>
+                <div class='header'>
+                    <h1>🎉 {subject}</h1>
+                </div>
+                <div class='content'>
+                    <h2>Hello {user.Name}!</h2>
+                    
+                    <div class='invitation-box'>
+                        <h3>You've been invited to join a chat!</h3>
+                        <p class='invited-by'>Invited by: {invitedBy.Name}</p>
+                    </div>
+                    
+                    <div class='room-details'>
+                        <h4>Chat Details:</h4>
+                        <p><strong>Name:</strong> {room.Name}</p>
+                        <p><strong>Type:</strong> {(room.Type == ChatRoomType.Direct ? "Direct Message" : "Group Chat")}</p>
+                        {(!string.IsNullOrEmpty(room.Description) ? $"<p><strong>Description:</strong> {room.Description}</p>" : "")}
+                        <p><strong>Created:</strong> {room.CreatedAt:MMM dd, yyyy 'at' h:mm tt}</p>
+                    </div>
+                    
+                    <p>
+                        <a href='#' class='button'>Join Chat Now</a>
+                    </p>
+                    
+                    <p>Start collaborating with your team members and stay up-to-date on important discussions.</p>
+                </div>
+                <div class='footer'>
+                    <p>This email was sent by BugTrackr. You can manage your notification preferences in your account settings.</p>
+                </div>
+            </div>
+        </body>
+        </html>";
+
+        var text = $@"
+        {subject}
+        
+        Hello {user.Name}!
+        
+        You've been invited to join a chat by {invitedBy.Name}.
+        
+        Chat Details:
+        - Name: {room.Name}
+        - Type: {(room.Type == ChatRoomType.Direct ? "Direct Message" : "Group Chat")}
+        {(!string.IsNullOrEmpty(room.Description) ? $"- Description: {room.Description}" : "")}
+        - Created: {room.CreatedAt:MMM dd, yyyy 'at' h:mm tt}
+        
+        Log in to BugTrackr to join the chat and start collaborating with your team.
+        
+        ---
+        This email was sent by BugTrackr. You can manage your notification preferences in your account settings.
+        ";
+
+        return (subject, html, text);
+    }
+
     private static string GetPriorityColor(string priority)
     {
         return priority.ToLower() switch

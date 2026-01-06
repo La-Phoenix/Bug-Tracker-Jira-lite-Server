@@ -228,4 +228,32 @@ public class MailjetEmailService : IEmailService
             }
         }
     }
+
+    public async Task SendChatMessageEmailAsync(User recipient, ChatMessage message, ChatRoom room)
+    {
+        try
+        {
+            var (subject, html, text) = EmailTemplates.ChatMessageEmail(recipient, message, room);
+            await SendEmailAsync(recipient.Email, recipient.Name, subject, html, text);
+            _logger.LogInformation("Chat message email sent to {Email} for room {RoomId}", recipient.Email, room.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send chat message email to {Email}", recipient.Email);
+        }
+    }
+
+    public async Task SendChatInvitationEmailAsync(User user, ChatRoom room, User invitedBy)
+    {
+        try
+        {
+            var (subject, html, text) = EmailTemplates.ChatInvitationEmail(user, room, invitedBy);
+            await SendEmailAsync(user.Email, user.Name, subject, html, text);
+            _logger.LogInformation("Chat invitation email sent to {Email} for room {RoomId}", user.Email, room.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send chat invitation email to {Email}", user.Email);
+        }
+    }
 }

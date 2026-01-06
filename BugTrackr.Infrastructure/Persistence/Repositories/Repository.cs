@@ -33,10 +33,17 @@ public class Repository<T> : IRepository<T> where T : class
         _context.Entry(entity).State = EntityState.Modified;
         await _context.SaveChangesAsync();
     }
+    public Task UpdateRangeAsync(IEnumerable<T> entities)
+    {
+
+        _dbSet.UpdateRange(entities);
+        return Task.CompletedTask;
+    }
 
     public void Update(T entity) => _dbSet.Update(entity);
 
     public void Delete(T entity) => _dbSet.Remove(entity);
+    public void DeleteRange(IEnumerable<T> entities) => _dbSet.RemoveRange(entities);
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     => await _context.SaveChangesAsync(cancellationToken);

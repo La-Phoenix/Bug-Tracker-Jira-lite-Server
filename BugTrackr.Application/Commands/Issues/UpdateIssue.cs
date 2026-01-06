@@ -4,6 +4,7 @@ using BugTrackr.Application.Common.Helpers;
 using BugTrackr.Application.DTOs.Issues;
 using BugTrackr.Application.Services;
 using BugTrackr.Application.Services.Email;
+using BugTrackr.Application.Services.NotificationService;
 using BugTrackr.Domain.Entities;
 using FluentValidation;
 using MediatR;
@@ -56,6 +57,7 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
     private readonly IRepository<User> _userRepo;
     private readonly IRepository<IssueLabel> _issueLabelRepo;
     private readonly IEmailService _emailService;
+    private readonly INotificationService _notificationService;
     private readonly IMapper _mapper;
     private readonly IValidator<UpdateIssueCommand> _validator;
     private readonly ILogger<UpdateIssueCommandHandler> _logger;
@@ -66,6 +68,7 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
         IRepository<Label> labelRepo,
         IRepository<IssueLabel> issueLabelRepo,
         IEmailService emailService,
+        INotificationService notificationService,
         IMapper mapper,
         IValidator<UpdateIssueCommand> validator,
         ILogger<UpdateIssueCommandHandler> logger)
@@ -75,6 +78,7 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
         _issueLabelRepo = issueLabelRepo;
         _userRepo = userRepo;
         _emailService = emailService;
+        _notificationService = notificationService;
         _mapper = mapper;
         _validator = validator;
         _logger = logger;
@@ -131,7 +135,7 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
                 .FirstAsync(i => i.Id == issue.Id, cancellationToken);
 
             // Send email notifications
-            await SendUpdateNotificationsAsync(updatedIssue, oldAssigneeId, oldStatus);
+            await SendUpdateNotificationsAsync(updatedIssue, oldAssigneeId, oldStatus, cancellationToken);
 
 
             var issueDto = _mapper.Map<IssueDto>(updatedIssue);
@@ -211,14 +215,38 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
         }
     }
 
-    private async Task SendUpdateNotificationsAsync(Issue issue, int? oldAssigneeId, string oldStatus)
+    private async Task SendUpdateNotificationsAsync(Issue issue, int? oldAssigneeId, string oldStatus, CancellationToken cancellationToken)
     {
         try
         {
+            // Determine what kind of update occurred
+            string updateType = GetUpdateType(issue, oldAssigneeId, oldStatus);
+
+            // Get watchers (project users who want issue updates)
+            var watchers = issue.Project?.ProjectUsers?
+                .Where(pu => pu.User.IssueUpdates)
+                .Select(pu => pu.User)
+                .ToList() ?? new List<User>();
+
+            // Send notification service notifications (real-time + persistent)
+            if (watchers.Any())
+            {
+                await _notificationService.SendIssueUpdatedNotification(
+                    watchers,
+                    issue,
+                    updateType,
+                    issue.Reporter, // You might want to pass the actual updater here
+                    cancellationToken);
+            }
+
             // 1. Notify new assignee if assignment changed
             if (issue.AssigneeId.HasValue && issue.AssigneeId != oldAssigneeId && issue.Assignee != null)
             {
-                await _emailService.SendIssueAssignedEmailAsync(issue.Assignee, issue, issue.Reporter);
+                await _notificationService.SendIssueAssignedNotification(
+                    issue.Assignee,
+                    issue,
+                    issue.Reporter,
+                    cancellationToken);
             }
 
             // 2. Notify old assignee if unassigned
@@ -264,6 +292,31 @@ public class UpdateIssueCommandHandler : IRequestHandler<UpdateIssueCommand, Api
             // Don't throw - notification failure shouldn't break the update
         }
     }
+
+    private string GetUpdateType(Issue issue, int? oldAssigneeId, string? oldStatus)
+    {
+        var changes = new List<string>();
+
+        // Check what changed
+        if (issue.AssigneeId != oldAssigneeId)
+        {
+            if (issue.AssigneeId.HasValue && !oldAssigneeId.HasValue)
+                changes.Add("assigned");
+            else if (!issue.AssigneeId.HasValue && oldAssigneeId.HasValue)
+                changes.Add("unassigned");
+            else if (issue.AssigneeId.HasValue && oldAssigneeId.HasValue)
+                changes.Add("reassigned");
+        }
+
+        if (oldStatus != issue.Status?.Name)
+        {
+            changes.Add($"status changed to {issue.Status?.Name}");
+        }
+
+        // Default to "updated" if no specific changes detected
+        return changes.Any() ? string.Join(", ", changes) : "updated";
+    }
+
 }
 
 

@@ -15,4 +15,6 @@ public interface IEmailService
     Task SendWeeklyDigestEmailAsync(User user, List<Issue> assignedIssues, List<Project> projects);
     Task SendMentionNotificationEmailAsync(User user, Issue issue, Comment comment, User mentionedBy);
     Task SendBulkEmailAsync(List<string> recipients, string subject, string htmlContent, string textContent = null);
+    Task SendChatMessageEmailAsync(User recipient, ChatMessage message, ChatRoom room);
+    Task SendChatInvitationEmailAsync(User user, ChatRoom room, User invitedBy);
 }

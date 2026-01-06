@@ -137,7 +137,7 @@ public class AddParticipantsCommandHandler : IRequestHandler<AddParticipantsComm
 
             foreach (var participant in participantDtos)
             {
-                await _notificationService.NotifyParticipantAdded(request.RoomId, participant);
+                await _notificationService.NotifyParticipantAdded(request.RoomId, participant, cancellationToken);
             }
 
             return ApiResponse<List<ChatParticipantDto>>.SuccessResponse(participantDtos, 201, "Participants added successfully");

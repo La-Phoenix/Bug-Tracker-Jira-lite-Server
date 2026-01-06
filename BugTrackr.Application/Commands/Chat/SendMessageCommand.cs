@@ -135,7 +135,7 @@ public class SendMessageCommandHandler : IRequestHandler<SendMessageCommand, Api
             var messageDto = _mapper.Map<ChatMessageDto>(createdMessage);
 
             // REAL-TIME NOTIFICATION
-            await _notificationService.NotifyNewMessage(request.RoomId, messageDto);
+            await _notificationService.NotifyNewMessage(request.RoomId, messageDto, cancellationToken);
 
             return ApiResponse<ChatMessageDto>.SuccessResponse(messageDto, 201, "Message sent successfully");
         }
